@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>藏历天文历算可视化工具 - 简化版</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0c1445 0%, #1a1a2e 50%, #16213e 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .title {
+            font-size: 1.8rem;
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+        
+        .main-content {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+        
+        .control-panel {
+            width: 280px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 1.5rem;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .panel-section {
+            margin-bottom: 2rem;
+        }
+        
+        .panel-section h3 {
+            color: #4facfe;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(79, 172, 254, 0.3);
+            padding-bottom: 0.5rem;
+        }
+        
+        .visualization-area {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0c1445 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .info-panel {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 1.5rem;
+            overflow-y: auto;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 0.2rem;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn.active {
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            margin: 0.3rem 0;
+        }
+        
+        select option {
+            background: #1a1a2e;
+            color: white;
+        }
+        
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            border-left: 3px solid #4facfe;
+        }
+        
+        .value {
+            color: #4facfe;
+            font-weight: 500;
+        }
+        
+        .explanation-display {
+            background: rgba(118, 75, 162, 0.1);
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 3px solid #764ba2;
+            margin-top: 1rem;
+        }
+        
+        .explanation-display h4 {
+            color: #764ba2;
+            margin-bottom: 0.5rem;
+        }
+        
+        .canvas-container {
+            width: 600px;
+            height: 400px;
+            border: 2px solid rgba(79, 172, 254, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .celestial-object {
+            position: absolute;
+            border-radius: 50%;
+            transition: all 0.5s ease;
+        }
+        
+        .sun {
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle, #ffff00 0%, #ff8800 100%);
+            box-shadow: 0 0 20px #ffff00;
+        }
+        
+        .moon {
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #cccccc 0%, #888888 100%);
+            box-shadow: 0 0 10px #cccccc;
+        }
+        
+        .earth {
+            width: 25px;
+            height: 25px;
+            background: radial-gradient(circle, #4488ff 0%, #2266cc 100%);
+            box-shadow: 0 0 15px #4488ff;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: rgba(79, 172, 254, 0.3);
+            transform-origin: left center;
+        }
+        
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1 class="title">藏历天文历算可视化工具</h1>
+    </header>
+
+    <main class="main-content">
+        <!-- 左侧控制面板 -->
+        <aside class="control-panel">
+            <div class="panel-section">
+                <h3>日期控制</h3>
+                <label>选择日期:</label>
+                <input type="date" id="dateInput" value="2024-01-01">
+                <label>时间:</label>
+                <input type="time" id="timeInput" value="12:00">
+            </div>
+
+            <div class="panel-section">
+                <h3>藏历术语</h3>
+                <select id="termSelect">
+                    <option value="">选择术语...</option>
+                    <option value="sidereal_day">恒星日</option>
+                    <option value="solar_day">太阳日</option>
+                    <option value="lunar_month">朔望月</option>
+                    <option value="constellation_28">二十八宿</option>
+                    <option value="constellation_27">二十七宿</option>
+                    <option value="solar_terms">节气</option>
+                </select>
+            </div>
+
+            <div class="panel-section">
+                <h3>播放控制</h3>
+                <button class="btn" id="playBtn">▶️ 播放</button>
+                <button class="btn" id="prevBtn">⏮️ 前一天</button>
+                <button class="btn" id="nextBtn">⏭️ 后一天</button>
+            </div>
+
+            <div class="panel-section">
+                <h3>视角控制</h3>
+                <button class="btn active" id="geocentricBtn">地心视角</button>
+                <button class="btn" id="heliocentricBtn">日心视角</button>
+                <button class="btn" id="lunarcentricBtn">月心视角</button>
+            </div>
+        </aside>
+
+        <!-- 中央可视化区域 -->
+        <section class="visualization-area">
+            <div class="canvas-container" id="canvasContainer">
+                <div class="status" id="status">初始化中...</div>
+                <div class="earth celestial-object"></div>
+                <div class="sun celestial-object" id="sun"></div>
+                <div class="moon celestial-object" id="moon"></div>
+            </div>
+        </section>
+
+        <!-- 右侧信息面板 -->
+        <aside class="info-panel">
+            <div class="panel-section">
+                <h3>实时数据</h3>
+                <div class="data-item">
+                    <span>当前日期:</span>
+                    <span class="value" id="currentDate">2024-01-01</span>
+                </div>
+                <div class="data-item">
+                    <span>恒星时:</span>
+                    <span class="value" id="siderealTime">--:--:--</span>
+                </div>
+                <div class="data-item">
+                    <span>太阳时:</span>
+                    <span class="value" id="solarTime">--:--:--</span>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>天体位置</h3>
+                <div class="data-item">
+                    <span>太阳赤经:</span>
+                    <span class="value" id="sunRA">--°</span>
+                </div>
+                <div class="data-item">
+                    <span>太阳赤纬:</span>
+                    <span class="value" id="sunDec">--°</span>
+                </div>
+                <div class="data-item">
+                    <span>月亮赤经:</span>
+                    <span class="value" id="moonRA">--°</span>
+                </div>
+                <div class="data-item">
+                    <span>月亮赤纬:</span>
+                    <span class="value" id="moonDec">--°</span>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>计算结果</h3>
+                <div class="data-item">
+                    <span>时间差累积:</span>
+                    <span class="value" id="timeDifference">0 分钟</span>
+                </div>
+            </div>
+
+            <div class="explanation-display" id="termExplanation" style="display: none;">
+                <h4 id="termTitle">术语解释</h4>
+                <p id="termDescription">选择左侧术语查看详细解释...</p>
+            </div>
+        </aside>
+    </main>
+
+    <script src="js/astronomy-calculator.js"></script>
+    <script>
+        // 简化的应用程序
+        class SimpleApp {
+            constructor() {
+                this.calculator = new AstronomyCalculator();
+                this.currentDate = new Date('2024-01-01T12:00:00');
+                this.isPlaying = false;
+                this.playInterval = null;
+                this.viewMode = 'geocentric';
+                
+                this.init();
+            }
+            
+            init() {
+                try {
+                    this.bindEvents();
+                    this.updateDisplay();
+                    document.getElementById('status').textContent = '就绪';
+                    document.getElementById('status').style.background = 'rgba(81, 207, 102, 0.7)';
+                } catch (error) {
+                    console.error('初始化失败:', error);
+                    document.getElementById('status').textContent = '初始化失败';
+                    document.getElementById('status').style.background = 'rgba(255, 107, 107, 0.7)';
+                }
+            }
+            
+            bindEvents() {
+                document.getElementById('dateInput').addEventListener('change', () => this.updateDate());
+                document.getElementById('timeInput').addEventListener('change', () => this.updateDate());
+                document.getElementById('termSelect').addEventListener('change', () => this.showTermExplanation());
+                document.getElementById('playBtn').addEventListener('click', () => this.togglePlay());
+                document.getElementById('prevBtn').addEventListener('click', () => this.previousDay());
+                document.getElementById('nextBtn').addEventListener('click', () => this.nextDay());
+                
+                // 视角控制
+                document.getElementById('geocentricBtn').addEventListener('click', () => this.setViewMode('geocentric'));
+                document.getElementById('heliocentricBtn').addEventListener('click', () => this.setViewMode('heliocentric'));
+                document.getElementById('lunarcentricBtn').addEventListener('click', () => this.setViewMode('lunarcentric'));
+            }
+            
+            updateDate() {
+                const dateValue = document.getElementById('dateInput').value;
+                const timeValue = document.getElementById('timeInput').value;
+                this.currentDate = new Date(dateValue + 'T' + timeValue + ':00');
+                this.updateDisplay();
+            }
+            
+            updateDisplay() {
+                try {
+                    // 计算天文数据
+                    const siderealTime = this.calculator.calculateSiderealTime(this.currentDate);
+                    const sunPosition = this.calculator.calculateSunPosition(this.currentDate);
+                    const moonPosition = this.calculator.calculateMoonPosition(this.currentDate);
+                    
+                    // 更新数据显示
+                    document.getElementById('currentDate').textContent = this.currentDate.toLocaleDateString('zh-CN');
+                    document.getElementById('solarTime').textContent = this.currentDate.toLocaleTimeString('zh-CN');
+                    
+                    const hours = Math.floor(siderealTime);
+                    const minutes = Math.floor((siderealTime - hours) * 60);
+                    const seconds = Math.floor(((siderealTime - hours) * 60 - minutes) * 60);
+                    document.getElementById('siderealTime').textContent = 
+                        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    document.getElementById('sunRA').textContent = sunPosition.rightAscension.toFixed(1) + '°';
+                    document.getElementById('sunDec').textContent = sunPosition.declination.toFixed(1) + '°';
+                    document.getElementById('moonRA').textContent = moonPosition.rightAscension.toFixed(1) + '°';
+                    document.getElementById('moonDec').textContent = moonPosition.declination.toFixed(1) + '°';
+                    
+                    // 计算时间差
+                    const startOfYear = new Date(this.currentDate.getFullYear(), 0, 1);
+                    const daysDiff = Math.floor((this.currentDate - startOfYear) / (1000 * 60 * 60 * 24));
+                    const timeDiff = daysDiff * (this.calculator.SOLAR_DAY_HOURS - this.calculator.SIDEREAL_DAY_HOURS) * 60;
+                    document.getElementById('timeDifference').textContent = timeDiff.toFixed(1) + ' 分钟';
+                    
+                    // 更新可视化
+                    this.updateVisualization(sunPosition, moonPosition);
+                    
+                } catch (error) {
+                    console.error('更新显示失败:', error);
+                }
+            }
+            
+            updateVisualization(sunPosition, moonPosition) {
+                const container = document.getElementById('canvasContainer');
+                const centerX = container.clientWidth / 2;
+                const centerY = container.clientHeight / 2;
+                const radius = Math.min(centerX, centerY) - 50;
+                
+                // 更新太阳位置
+                const sunAngle = (sunPosition.rightAscension - 90) * Math.PI / 180;
+                const sunX = centerX + radius * 0.8 * Math.cos(sunAngle);
+                const sunY = centerY + radius * 0.8 * Math.sin(sunAngle);
+                
+                const sunElement = document.getElementById('sun');
+                sunElement.style.left = (sunX - 15) + 'px';
+                sunElement.style.top = (sunY - 15) + 'px';
+                
+                // 更新月亮位置
+                const moonAngle = (moonPosition.rightAscension - 90) * Math.PI / 180;
+                const moonX = centerX + radius * 0.6 * Math.cos(moonAngle);
+                const moonY = centerY + radius * 0.6 * Math.sin(moonAngle);
+                
+                const moonElement = document.getElementById('moon');
+                moonElement.style.left = (moonX - 10) + 'px';
+                moonElement.style.top = (moonY - 10) + 'px';
+            }
+            
+            showTermExplanation() {
+                const termKey = document.getElementById('termSelect').value;
+                const explanationDiv = document.getElementById('termExplanation');
+                
+                if (!termKey) {
+                    explanationDiv.style.display = 'none';
+                    return;
+                }
+                
+                const explanation = this.calculator.getTermExplanation(termKey);
+                document.getElementById('termTitle').textContent = explanation.title;
+                document.getElementById('termDescription').textContent = explanation.description;
+                explanationDiv.style.display = 'block';
+            }
+            
+            togglePlay() {
+                this.isPlaying = !this.isPlaying;
+                const playBtn = document.getElementById('playBtn');
+                
+                if (this.isPlaying) {
+                    playBtn.textContent = '⏸️ 暂停';
+                    this.playInterval = setInterval(() => {
+                        this.nextDay();
+                    }, 1000);
+                } else {
+                    playBtn.textContent = '▶️ 播放';
+                    if (this.playInterval) {
+                        clearInterval(this.playInterval);
+                    }
+                }
+            }
+            
+            previousDay() {
+                this.currentDate.setDate(this.currentDate.getDate() - 1);
+                this.updateInputs();
+                this.updateDisplay();
+            }
+            
+            nextDay() {
+                this.currentDate.setDate(this.currentDate.getDate() + 1);
+                this.updateInputs();
+                this.updateDisplay();
+            }
+            
+            updateInputs() {
+                document.getElementById('dateInput').value = this.currentDate.toISOString().split('T')[0];
+                const hours = this.currentDate.getHours().toString().padStart(2, '0');
+                const minutes = this.currentDate.getMinutes().toString().padStart(2, '0');
+                document.getElementById('timeInput').value = `${hours}:${minutes}`;
+            }
+            
+            setViewMode(mode) {
+                this.viewMode = mode;
+                
+                // 更新按钮状态
+                document.querySelectorAll('.control-panel .btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(mode + 'Btn').classList.add('active');
+                
+                console.log('切换视角模式:', mode);
+            }
+        }
+        
+        // 启动应用
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new SimpleApp();
+        });
+    </script>
+</body>
+</html>

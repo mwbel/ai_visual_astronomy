@@ -1,0 +1,394 @@
+/* 响应式设计样式 */
+
+/* 大屏幕 (1200px+) */
+@media (min-width: 1200px) {
+    .header-content {
+        max-width: 1400px;
+    }
+    
+    .control-panel {
+        width: 320px;
+    }
+    
+    .info-panel {
+        width: 340px;
+    }
+    
+    .title {
+        font-size: 2rem;
+    }
+}
+
+/* 中等屏幕 (768px - 1199px) */
+@media (max-width: 1199px) and (min-width: 768px) {
+    .control-panel {
+        width: 260px;
+    }
+    
+    .info-panel {
+        width: 280px;
+    }
+    
+    .title {
+        font-size: 1.6rem;
+    }
+    
+    .header-controls {
+        gap: 0.5rem;
+    }
+    
+    .btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* 小屏幕 (480px - 767px) */
+@media (max-width: 767px) and (min-width: 480px) {
+    .header {
+        padding: 0.8rem 1rem;
+    }
+    
+    .title {
+        font-size: 1.4rem;
+    }
+    
+    .header-controls {
+        gap: 0.3rem;
+    }
+    
+    .btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.7rem;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .control-panel {
+        width: 100%;
+        height: auto;
+        max-height: 200px;
+        order: 2;
+        border-right: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 1rem;
+    }
+    
+    .visualization-area {
+        order: 1;
+        height: 60vh;
+    }
+    
+    .info-panel {
+        width: 100%;
+        height: auto;
+        max-height: 200px;
+        order: 3;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 1rem;
+    }
+    
+    .panel-section {
+        margin-bottom: 1rem;
+    }
+    
+    .panel-section h3 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* 水平滚动的控制面板 */
+    .control-panel {
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .panel-section {
+        min-width: 200px;
+        flex-shrink: 0;
+    }
+    
+    /* 时间轴调整 */
+    .timeline-container {
+        padding: 0.8rem 1rem;
+    }
+    
+    .timeline-header {
+        flex-direction: column;
+        gap: 0.3rem;
+        align-items: flex-start;
+    }
+    
+    .timeline-date {
+        font-size: 0.7rem;
+    }
+}
+
+/* 超小屏幕 (< 480px) */
+@media (max-width: 479px) {
+    .header {
+        padding: 0.5rem;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+    
+    .title {
+        font-size: 1.2rem;
+    }
+    
+    .header-controls {
+        align-self: stretch;
+        justify-content: space-between;
+    }
+    
+    .btn {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.7rem;
+        flex: 1;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .visualization-area {
+        height: 50vh;
+        order: 1;
+    }
+    
+    .control-panel, .info-panel {
+        width: 100%;
+        height: auto;
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0.8rem;
+    }
+    
+    .control-panel {
+        order: 2;
+        display: flex;
+        overflow-x: auto;
+        gap: 0.8rem;
+    }
+    
+    .info-panel {
+        order: 3;
+    }
+    
+    .panel-section {
+        min-width: 180px;
+        margin-bottom: 0.8rem;
+    }
+    
+    .panel-section h3 {
+        font-size: 0.9rem;
+        margin-bottom: 0.4rem;
+    }
+    
+    /* 简化按钮组 */
+    .view-controls, .display-mode {
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    
+    .playback-controls {
+        gap: 0.3rem;
+    }
+    
+    .btn-control, .btn-view, .btn-mode {
+        padding: 0.3rem;
+        font-size: 0.7rem;
+    }
+    
+    /* 模态对话框调整 */
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+        padding: 1rem;
+    }
+    
+    .modal h2 {
+        font-size: 1.2rem;
+        margin-bottom: 1rem;
+    }
+    
+    /* 时间轴简化 */
+    .timeline-container {
+        padding: 0.5rem;
+    }
+    
+    .timeline-header {
+        display: none; /* 隐藏时间轴标签以节省空间 */
+    }
+    
+    .timeline-slider {
+        height: 8px;
+    }
+    
+    .timeline-slider::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .timeline-slider::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+    .header {
+        padding: 0.3rem 1rem;
+    }
+    
+    .title {
+        font-size: 1rem;
+    }
+    
+    .main-content {
+        flex-direction: row;
+    }
+    
+    .control-panel {
+        width: 200px;
+        height: auto;
+        max-height: none;
+        order: 1;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: none;
+        display: block;
+        overflow-y: auto;
+    }
+    
+    .visualization-area {
+        order: 2;
+        height: auto;
+    }
+    
+    .info-panel {
+        width: 200px;
+        height: auto;
+        max-height: none;
+        order: 3;
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: none;
+    }
+    
+    .panel-section {
+        margin-bottom: 0.8rem;
+    }
+    
+    .timeline-container {
+        padding: 0.3rem 1rem;
+    }
+}
+
+/* 打印样式 */
+@media print {
+    .header-controls,
+    .control-panel,
+    .info-panel,
+    .timeline-container,
+    .viz-controls,
+    .modal {
+        display: none !important;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .visualization-area {
+        width: 100%;
+        height: 80vh;
+    }
+    
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .title {
+        color: black;
+        background: none;
+        -webkit-text-fill-color: initial;
+    }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+    .btn {
+        border: 2px solid currentColor;
+    }
+    
+    .panel-section h3 {
+        border-bottom-width: 2px;
+    }
+    
+    .data-item, .result-item, .position-item {
+        border-left-width: 4px;
+    }
+    
+    input, select {
+        border-width: 2px;
+    }
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .btn::before,
+    .panel-section h3::after,
+    .btn-view.active::before,
+    .btn-mode.active::before {
+        display: none;
+    }
+}
+
+/* 暗色主题偏好 */
+@media (prefers-color-scheme: dark) {
+    /* 已经是暗色主题，保持现有样式 */
+}
+
+/* 亮色主题偏好 */
+@media (prefers-color-scheme: light) {
+    body {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        color: #333333;
+    }
+    
+    .header {
+        background: rgba(255, 255, 255, 0.9);
+        border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    .control-panel, .info-panel {
+        background: rgba(255, 255, 255, 0.8);
+        border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    .visualization-area {
+        background: radial-gradient(ellipse at center, #ffffff 0%, #f5f7fa 100%);
+    }
+    
+    .timeline-container {
+        background: rgba(255, 255, 255, 0.9);
+        border-top-color: rgba(0, 0, 0, 0.1);
+    }
+}
