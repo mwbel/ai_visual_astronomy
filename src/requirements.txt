@@ -1,0 +1,7 @@
+numpy>=1.24  # 数值计算:模拟与计算（运动方程、波动）
+scipy   # 数值计算:模拟与计算（运动方程、波动
+matplotlib/plotly  # 可视化：2D/3D 绘制
+astropy  # 天文坐标、时间系统
+skyfield # 星体轨道计算与可视化
+jupyter # 交互式展示
+tzdata>=2024.1 # 系统时区数据库
