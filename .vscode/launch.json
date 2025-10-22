@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run main (astronomy)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/celestial_sphere_slider.py",
+      "console": "integratedTerminal",
+      "args": ["--lat", "31.23", "--lon", "121.47", "--tz", "Asia/Shanghai"]
+    }
+  ]
+}

@@ -495,34 +495,38 @@ def plot_geocentric_celestial_sphere(latitude, longitude, date_time, tz_name: st
                 hoverinfo='none',
             ))
         
-        # --- 找出日出日落时刻 ---
+        # --- 太阳日出日落时刻 ---
         f_sun = almanac.sunrise_sunset(ephemeris, location)
         t_events_sun, events_sun = almanac.find_discrete(t0, t1, f_sun)
 
-        extra_times = []
-        extra_alts = []
-        extra_azs = []
-
+        extra_times, extra_alts, extra_azs = [], [], []
         for t_e, ev in zip(t_events_sun, events_sun):
             alt_e, az_e, _ = observer.at(t_e).observe(ephemeris['sun']).apparent().altaz()
             extra_times.append(t_e.utc_datetime())
-            extra_alts.append(0.0)              # 强制高度角 = 0°
-            extra_azs.append(az_e.degrees)      # 方位角
+            extra_alts.append(0.0)             # 强制高度角=0
+            extra_azs.append(az_e.degrees)     # 方位角保持计算值
 
-        # --- 合并并按时间排序 ---
+        # --- 合并整点与日出日落点，排序 ---
         all_times = list(hours_utc) + extra_times
         all_alts  = list(sun_altitudes) + extra_alts
         all_azs   = list(sun_azimuths) + extra_azs
 
         all_times_sorted, all_alts_sorted, all_azs_sorted = zip(*sorted(zip(all_times, all_alts, all_azs)))
 
-        # --- 转换成 numpy ---
         sun_altitudes_arr = np.array(all_alts_sorted)
         sun_azimuths_arr  = np.array(all_azs_sorted)
-
         sun_x, sun_y, sun_z = _spherical_to_cartesian(sun_azimuths_arr, sun_altitudes_arr)
-
         
+        # --- 绘制连续曲线 ---
+        fig.add_trace(go.Scatter3d(
+            x=sun_x, y=sun_y, z=sun_z,
+            mode='lines+markers',
+            line=dict(color='orange', width=3),
+            marker=dict(size=3, color='orange'),
+            name='太阳轨迹',
+            hoverinfo='none'
+        ))
+
         # 月亮月出月落
         # Skyfield 使用 risings_and_settings 来计算月出月落
         f_moon = almanac.risings_and_settings(ephemeris, ephemeris['moon'], location)
@@ -543,6 +547,16 @@ def plot_geocentric_celestial_sphere(latitude, longitude, date_time, tz_name: st
                 name=label,
                 hoverinfo='none',
             ))
+        
+        # --- 绘制连续曲线 ---
+        fig.add_trace(go.Scatter3d(
+            x=moon_x, y=moon_y, z=moon_z,
+            mode='lines+markers',
+            line=dict(color='lightblue', width=3),
+            marker=dict(size=3, color='lightblue'),
+            name='月亮轨迹',
+            hoverinfo='none'
+        ))
 
     # 6. 可视化要求
     fig.update_layout( # 更新图表布局
