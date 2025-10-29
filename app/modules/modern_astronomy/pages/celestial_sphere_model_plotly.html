@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>天球模型（iframe）</title>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; background: #0b0f1a; color: #e6e9ef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    #container { position: relative; width: 100%; height: 100%; }
+    #scene { position: absolute; inset: 0; }
+    #overlay { position: absolute; right: 8px; top: 8px; background: rgba(0,0,0,0.45); color: #fff; border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.5; box-shadow: 0 2px 6px rgba(0,0,0,0.3); backdrop-filter: saturate(1.2) blur(2px); }
+    #hint { position: absolute; left: 12px; bottom: 12px; color: #99a1b3; font-size: 12px; }
+  </style>
+  <script type="text/javascript">window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
+  <script charset="utf-8" src="https://cdn.plot.ly/plotly-3.1.1.min.js" integrity="sha256-HUEFyfiTnZJxCxur99FjbKYTvKSzwDaD3/x5TqHpFu4=" crossorigin="anonymous"></script>
+  <script src="/assets/js/astro_math.js"></script>
+</head>
+<body>
+  <div id="container">
+    <div id="scene"></div>
+    <div id="overlay">加载参数中…</div>
+    <div id="hint">此页将逐步支持根据参数渲染天球视图</div>
+  </div>
+  <script>
+    function getParams() {
+      const qs = new URLSearchParams(window.location.search);
+      return {
+        lat: parseFloat(qs.get('lat') || '0'),
+        lon: parseFloat(qs.get('lon') || '0'),
+        tz: parseFloat(qs.get('tz') || String(-new Date().getTimezoneOffset()/60)),
+        date: qs.get('date') || '',
+        time: qs.get('time') || ''
+      };
+    }
+    function formatTZ(tz) {
+      if (isNaN(tz)) return 'UTC';
+      return tz >= 0 ? `UTC+${tz}` : `UTC${tz}`;
+    }
+    function setOverlayText(params) {
+      const { lat, lon, tz, date, time } = params;
+      const overlay = document.getElementById('overlay');
+      if (!overlay) return;
+      const tzDisp = formatTZ(tz);
+      const dateDisp = date || '--';
+      const timeDisp = time || '--:--';
+      overlay.textContent = `时间：${dateDisp} ${timeDisp} ${tzDisp}，地点：${lat}°, ${lon}°`;
+    }
+    function makeHorizonRing() {
+      const x = [], y = [], z = [];
+      for (let i = 0; i <= 360; i += 3) {
+        const t = i * Math.PI / 180;
+        x.push(Math.sin(t)); // 东-西轴
+        y.push(Math.cos(t)); // 北-南轴
+        z.push(0);
+      }
+      return {
+        type: 'scatter3d', mode: 'lines', line: { color: 'rgba(200,200,200,0.85)', width: 3 },
+        name: '地平圈', x, y, z, hoverinfo: 'none', showlegend: false,
+      };
+    }
+    function makeSphereGrid() {
+      const traces = [];
+      const latitudes = [-60, -30, 0, 30, 60];
+      latitudes.forEach(lat => {
+        const x=[], y=[], z=[]; const rad = lat*Math.PI/180;
+        for (let az=0; az<=360; az+=4){
+          const t = az*Math.PI/180;
+          x.push(Math.cos(rad)*Math.sin(t));
+          y.push(Math.cos(rad)*Math.cos(t));
+          z.push(Math.sin(rad));
+        }
+        traces.push({ type:'scatter3d', mode:'lines', x,y,z, line:{ color:'rgba(120,140,200,0.35)', width:1 }, hoverinfo:'none', showlegend:false });
+      });
+      const longitudes = [0,45,90,135,180,225,270,315];
+      longitudes.forEach(lon => {
+        const x=[], y=[], z=[]; const theta = lon*Math.PI/180;
+        for (let lat=-90; lat<=90; lat+=3){
+          const rad = lat*Math.PI/180;
+          x.push(Math.cos(rad)*Math.sin(theta));
+          y.push(Math.cos(rad)*Math.cos(theta));
+          z.push(Math.sin(rad));
+        }
+        traces.push({ type:'scatter3d', mode:'lines', x,y,z, line:{ color:'rgba(120,140,200,0.35)', width:1 }, hoverinfo:'none', showlegend:false });
+      });
+      return traces;
+    }
+    function makeDirsLabels(){
+      return {
+        type: 'scatter3d', mode: 'text',
+        text: ['北','东北','东','东南','南','西南','西','西北'],
+        textfont: { color: 'white', size: 12 }, textposition: 'middle center',
+        x: [0, Math.SQRT1_2, 1, Math.SQRT1_2, 0, -Math.SQRT1_2, -1, -Math.SQRT1_2],
+        y: [1, Math.SQRT1_2, 0, -Math.SQRT1_2, -1, -Math.SQRT1_2, 0, Math.SQRT1_2],
+        z: [0,0,0,0,0,0,0,0], hoverinfo: 'none', showlegend: false, name: '方向'
+      };
+    }
+    function makeSunMarker(params){
+      const { lat, lon, tz, date, time } = params;
+      if (!date || !time || isNaN(lat) || isNaN(lon) || isNaN(tz)) return null;
+      const d = new Date(`${date}T${time}:00`);
+      const pos = AstroMath.solarPosition(d, lat, lon, tz);
+      const alt = pos.altitude * Math.PI/180;
+      const az = pos.azimuth * Math.PI/180;
+      const x = Math.cos(alt) * Math.sin(az);
+      const y = Math.cos(alt) * Math.cos(az);
+      const z = Math.sin(alt);
+      return {
+        type: 'scatter3d', mode: 'markers', x:[x], y:[y], z:[z],
+        marker:{ color:'#ffcc66', size:6 }, name:'太阳', hovertemplate:`太阳\nAz=${pos.azimuth.toFixed(1)}°\nAlt=${pos.altitude.toFixed(1)}°<extra></extra>`
+      };
+    }
+    function initPlot(params) {
+      const sceneEl = document.getElementById('scene'); if (!sceneEl) return;
+      const layout = {
+        scene: {
+          xaxis: { showgrid: false, showticklabels: false, zeroline: false, showbackground: false },
+          yaxis: { showgrid: false, showticklabels: false, zeroline: false, showbackground: false },
+          zaxis: { showgrid: false, showticklabels: false, zeroline: false, showbackground: false },
+          aspectmode: 'cube', bgcolor: 'rgb(0,0,0)'
+        }, paper_bgcolor: 'rgb(0,0,0)', showlegend: false
+      };
+      const data = [ makeHorizonRing(), ...makeSphereGrid(), makeDirsLabels() ];
+      const sun = makeSunMarker(params); if (sun) data.push(sun);
+      Plotly.newPlot(sceneEl, data, layout, { displaylogo: false, responsive: true });
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const params = getParams();
+      setOverlayText(params);
+      initPlot(params);
+    });
+  </script>
+</body>
+</html>

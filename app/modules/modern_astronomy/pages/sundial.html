@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>日晷可视化</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>日晷可视化</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section id="content" style="margin-top:12px;">
+      <div class="visualization-container">
+        <div class="control-panel" style="font-size:16px;">
+          <div class="control-group">
+            <label for="timeSlider">时间 (小时):</label>
+            <input type="range" id="timeSlider" min="6" max="18" step="0.1" value="12">
+            <span id="timeValue">12:00</span>
+          </div>
+          <div class="control-group">
+            <label for="sundialType">日晷类型:</label>
+            <select id="sundialType" style="font-size:16px;">
+              <option value="horizontal">水平日晷</option>
+              <option value="vertical">垂直日晷</option>
+              <option value="equatorial">赤道日晷</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="viewMode">显示模式:</label>
+            <select id="viewMode" style="font-size:16px;">
+              <option value="3d">3D视图</option>
+              <option value="2d">2D俯视图</option>
+              <option value="shadow">阴影轨迹</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <button id="playBtn" class="btn btn-primary">播放动画</button>
+            <button id="pauseBtn" class="btn btn-secondary">暂停</button>
+          </div>
+        </div>
+        
+        <div id="visualization" class="plot-container">
+          <div id="plotly-div" style="width: 100%; height: 600px; background:#0a0d12; border-radius:8px;"></div>
+        </div>
+        
+        <div class="info-panel" style="font-size:16px;">
+          <h3>日晷原理说明</h3>
+          <ul>
+            <li><strong>日晷</strong>: 利用太阳投影来指示时间的古老计时器</li>
+            <li><strong>晷针</strong>: 投射阴影的指针，通常指向北极星方向</li>
+            <li><strong>晷面</strong>: 标有时间刻度的平面，阴影在其上移动</li>
+            <li><strong>时角</strong>: 太阳相对于正午位置的角度偏移</li>
+            <li><strong>季节变化</strong>: 由于地球轨道倾斜，阴影长度随季节变化</li>
+            <li><strong>地理位置</strong>: 不同纬度需要不同的晷针角度设计</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div style="text-align:center; padding: 16px;">
+    <a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a>
+  </div>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    // 日晷可视化类
+    class SundialVisualization {
+      constructor() {
+        this.currentTime = 12;
+        this.currentDate = new Date();
+        this.latitude = 39.9; // 默认北京纬度
+        this.longitude = 116.4; // 默认北京经度
+        this.sundialType = 'horizontal';
+        this.viewMode = '3d';
+        this.animationId = null;
+        this.isPlaying = false;
+        
+        this.initializeControls();
+        this.updateVisualization();
+      }
+
+      initializeControls() {
+        const timeSlider = document.getElementById('timeSlider');
+        const timeValue = document.getElementById('timeValue');
+        const sundialType = document.getElementById('sundialType');
+        const viewMode = document.getElementById('viewMode');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+
+        timeSlider.addEventListener('input', (e) => {
+          this.currentTime = parseFloat(e.target.value);
+          timeValue.textContent = `${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`;
+          if (!this.isPlaying) {
+            this.updateVisualization();
+          }
+        });
+
+        sundialType.addEventListener('change', (e) => {
+          this.sundialType = e.target.value;
+          this.updateVisualization();
+        });
+
+        viewMode.addEventListener('change', (e) => {
+          this.viewMode = e.target.value;
+          this.updateVisualization();
+        });
+
+        playBtn.addEventListener('click', () => this.startAnimation());
+        pauseBtn.addEventListener('click', () => this.stopAnimation());
+
+        // 监听位置和日期变化
+        document.addEventListener('locationChanged', (e) => {
+          this.latitude = e.detail.latitude;
+          this.longitude = e.detail.longitude;
+          this.updateVisualization();
+        });
+
+        document.addEventListener('dateChanged', (e) => {
+          this.currentDate = new Date(e.detail.date);
+          this.updateVisualization();
+        });
+      }
+
+      // 计算太阳位置
+      calculateSunPosition() {
+        const dayOfYear = Math.floor((this.currentDate - new Date(this.currentDate.getFullYear(), 0, 0)) / 86400000);
+        
+        // 太阳赤纬角
+        const declination = 23.45 * Math.sin(Math.PI * (284 + dayOfYear) / 180) * Math.PI / 180;
+        
+        // 时角
+        const hourAngle = 15 * (this.currentTime - 12) * Math.PI / 180;
+        
+        // 太阳高度角
+        const latRad = this.latitude * Math.PI / 180;
+        const elevation = Math.asin(
+          Math.sin(latRad) * Math.sin(declination) + 
+          Math.cos(latRad) * Math.cos(declination) * Math.cos(hourAngle)
+        );
+        
+        // 太阳方位角
+        const azimuth = Math.atan2(
+          Math.sin(hourAngle),
+          Math.cos(hourAngle) * Math.sin(latRad) - Math.tan(declination) * Math.cos(latRad)
+        );
+        
+        return {
+          elevation: elevation,
+          azimuth: azimuth,
+          elevationDeg: elevation * 180 / Math.PI,
+          azimuthDeg: azimuth * 180 / Math.PI
+        };
+      }
+
+      // 计算晷针阴影
+      calculateGnomonShadow(gnomonHeight = 1) {
+        const sunPos = this.calculateSunPosition();
+        
+        if (sunPos.elevation <= 0) {
+          return null; // 太阳在地平线以下
+        }
+        
+        const shadowLength = gnomonHeight / Math.tan(sunPos.elevation);
+        const shadowX = shadowLength * Math.sin(sunPos.azimuth);
+        const shadowY = shadowLength * Math.cos(sunPos.azimuth);
+        
+        return {
+          length: shadowLength,
+          x: shadowX,
+          y: shadowY,
+          angle: sunPos.azimuthDeg
+        };
+      }
+
+      // 生成时间刻度
+      generateTimeMarks() {
+        const marks = [];
+        for (let hour = 6; hour <= 18; hour++) {
+          const tempTime = this.currentTime;
+          this.currentTime = hour;
+          const shadow = this.calculateGnomonShadow();
+          this.currentTime = tempTime;
+          
+          if (shadow) {
+            marks.push({
+              hour: hour,
+              x: shadow.x,
+              y: shadow.y,
+              label: `${hour}:00`
+            });
+          }
+        }
+        return marks;
+      }
+
+      // 创建3D日晷可视化
+      create3DVisualization() {
+        const shadow = this.calculateGnomonShadow();
+        const timeMarks = this.generateTimeMarks();
+        const latRad = this.latitude * Math.PI / 180;
+
+        const traces = [];
+
+        // 不同类型的晷面
+        if (this.sundialType === 'horizontal') {
+          // 水平晷面（z=0）
+          traces.push({
+            type: 'surface',
+            x: [[-2, 2], [-2, 2]],
+            y: [[-2, -2], [2, 2]],
+            z: [[0, 0], [0, 0]],
+            colorscale: [[0, 'rgb(139,69,19)'], [1, 'rgb(160,82,45)']],
+            showscale: false,
+            opacity: 0.8,
+            name: '日晷底盘'
+          });
+          // 晷针指向北极（倾角=纬度）
+          traces.push({
+            type: 'scatter3d', mode: 'lines',
+            x: [0, 0], y: [0, Math.cos(latRad)], z: [0, Math.sin(latRad)],
+            line: { color: 'black', width: 8 }, name: '晷针'
+          });
+        } else if (this.sundialType === 'vertical') {
+          // 垂直晷面（y=0 平面）用轮廓线表示
+          const rectX = [-2, 2, 2, -2, -2];
+          const rectY = [0, 0, 0, 0, 0];
+          const rectZ = [0, 0, 1.5, 1.5, 0];
+          traces.push({ type:'scatter3d', mode:'lines', x:rectX, y:rectY, z:rectZ, line:{ color:'brown', width:6 }, name:'垂直晷面' });
+          // 晷针仍指向北极方向
+          traces.push({ type:'scatter3d', mode:'lines', x:[0,0], y:[0, Math.cos(latRad)], z:[0, Math.sin(latRad)], line:{ color:'black', width:8 }, name:'晷针' });
+        } else {
+          // 赤道日晷：晷面与赤道平面平行（法向量指向地轴）
+          const c = Math.cos(latRad), s = Math.sin(latRad);
+          // 取两条在该平面上的正交基：e1 与 e2
+          const e1 = [1, 0, 0];
+          const e2 = [0, s, -c]; // 与法向量 [0,c,s] 正交
+          function scale(v, k){ return [v[0]*k, v[1]*k, v[2]*k]; }
+          function add(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+          const p1 = add(scale(e1,-2), scale(e2,0));
+          const p2 = add(scale(e1, 2), scale(e2,0));
+          const p3 = add(scale(e1, 2), scale(e2,1.5));
+          const p4 = add(scale(e1,-2), scale(e2,1.5));
+          const rectX = [p1[0], p2[0], p3[0], p4[0], p1[0]];
+          const rectY = [p1[1], p2[1], p3[1], p4[1], p1[1]];
+          const rectZ = [p1[2], p2[2], p3[2], p4[2], p1[2]];
+          traces.push({ type:'scatter3d', mode:'lines', x:rectX, y:rectY, z:rectZ, line:{ color:'brown', width:6 }, name:'赤道晷面' });
+          // 晷针指向地轴方向
+          traces.push({ type:'scatter3d', mode:'lines', x:[0,0], y:[0,c], z:[0,s], line:{ color:'black', width:8 }, name:'晷针' });
+        }
+
+        // 当前阴影
+        if (shadow) {
+          traces.push({
+            type: 'scatter3d', mode: 'lines+markers',
+            x: [0, shadow.x], y: [0, shadow.y], z: [0, 0],
+            line: { color: 'red', width: 6 }, marker: { color: 'red', size: 8 },
+            name: `当前时间 ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`
+          });
+        }
+
+        // 时间刻度
+        if (timeMarks.length > 0) {
+          traces.push({
+            type: 'scatter3d', mode: 'markers+text',
+            x: timeMarks.map(m => m.x), y: timeMarks.map(m => m.y), z: timeMarks.map(() => 0.05),
+            text: timeMarks.map(m => m.label), textposition: 'top center',
+            marker: { color: '#1E3A8A', size: 6 }, name: '时间刻度'
+          });
+          timeMarks.forEach(mark => {
+            traces.push({ type:'scatter3d', mode:'lines', x:[0,mark.x], y:[0,mark.y], z:[0,0], line:{ color:'rgba(30,58,138,0.6)', width:2 }, showlegend:false });
+          });
+        }
+
+        const layout = {
+          title: `${this.sundialType === 'horizontal' ? '水平' : this.sundialType === 'vertical' ? '垂直' : '赤道'}日晷 - ${this.currentDate.toLocaleDateString()} ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          scene: {
+            xaxis: { title: '东西方向 (m)', range: [-2, 2] },
+            yaxis: { title: '南北方向 (m)', range: [-2, 2] },
+            zaxis: { title: '高度 (m)', range: [0, 1.5] },
+            aspectmode: 'cube', bgcolor: 'rgb(135, 206, 235)'
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: '#1E3A8A' }
+        };
+
+        return { data: traces, layout };
+      }
+
+      // 创建2D俯视图
+      create2DVisualization() {
+        const shadow = this.calculateGnomonShadow();
+        const timeMarks = this.generateTimeMarks();
+        
+        // 日晷圆盘
+        const theta = [];
+        const r = [];
+        for (let i = 0; i <= 360; i += 5) {
+          theta.push(i);
+          r.push(2);
+        }
+        
+        const dialCircle = {
+          type: 'scatterpolar',
+          mode: 'lines',
+          r: r,
+          theta: theta,
+          line: { color: 'brown', width: 3 },
+          name: '日晷边缘'
+        };
+
+        const traces = [dialCircle];
+
+        // 当前阴影
+        if (shadow) {
+          const shadowAngle = Math.atan2(shadow.x, shadow.y) * 180 / Math.PI;
+          const currentShadow = {
+            type: 'scatterpolar',
+            mode: 'lines+markers',
+            r: [0, shadow.length],
+            theta: [shadowAngle, shadowAngle],
+            line: { color: 'red', width: 6 },
+            marker: { color: 'red', size: 10 },
+            name: `当前时间 ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`
+          };
+          traces.push(currentShadow);
+        }
+
+        // 时间刻度
+        if (timeMarks.length > 0) {
+          timeMarks.forEach(mark => {
+            const angle = Math.atan2(mark.x, mark.y) * 180 / Math.PI;
+            const distance = Math.sqrt(mark.x * mark.x + mark.y * mark.y);
+            
+            traces.push({
+              type: 'scatterpolar',
+              mode: 'lines+text',
+              r: [0, distance],
+              theta: [angle, angle],
+              text: ['', mark.label],
+              textposition: 'top center',
+              line: { color: 'rgba(0,0,255,0.5)', width: 2 },
+              showlegend: false
+            });
+          });
+        }
+
+        const layout = {
+          title: `日晷俯视图 - ${this.currentDate.toLocaleDateString()} ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          polar: {
+            radialaxis: {
+              visible: true,
+              range: [0, 3]
+            },
+            angularaxis: {
+              direction: 'clockwise',
+              rotation: 90
+            }
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0)',
+          font: { color: '#1E3A8A' }
+        };
+
+        return { data: traces, layout };
+      }
+
+      // 创建阴影轨迹图
+      createShadowTrajectory() {
+        const shadows = [];
+        const times = [];
+        
+        for (let hour = 6; hour <= 18; hour += 0.5) {
+          const tempTime = this.currentTime;
+          this.currentTime = hour;
+          const shadow = this.calculateGnomonShadow();
+          this.currentTime = tempTime;
+          
+          if (shadow) {
+            shadows.push(shadow);
+            times.push(hour);
+          }
+        }
+
+        const trajectoryTrace = {
+          type: 'scatter',
+          mode: 'lines+markers',
+          x: shadows.map(s => s.x),
+          y: shadows.map(s => s.y),
+          text: times.map(t => `${Math.floor(t)}:${String(Math.floor((t % 1) * 60)).padStart(2, '0')}`),
+          line: { color: '#1E3A8A', width: 3 },
+          marker: { color: '#1E3A8A', size: 6 },
+          name: '阴影轨迹'
+        };
+
+        // 当前位置
+        const currentShadow = this.calculateGnomonShadow();
+        const traces = [trajectoryTrace];
+        
+        if (currentShadow) {
+          traces.push({
+            type: 'scatter',
+            mode: 'markers',
+            x: [currentShadow.x],
+            y: [currentShadow.y],
+            marker: { color: 'red', size: 12 },
+            name: '当前位置'
+          });
+        }
+
+        const layout = {
+          title: `阴影轨迹图 - ${this.currentDate.toLocaleDateString()}`,
+          xaxis: { title: '东西方向 (m)', range: [-3, 3] },
+          yaxis: { title: '南北方向 (m)', range: [-3, 3] },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0.8)',
+          font: { color: '#1E3A8A' }
+        };
+
+        return { data: traces, layout };
+      }
+
+      // 更新可视化
+      updateVisualization() {
+        let plotData;
+        
+        switch (this.viewMode) {
+          case '3d':
+            plotData = this.create3DVisualization();
+            break;
+          case '2d':
+            plotData = this.create2DVisualization();
+            break;
+          case 'shadow':
+            plotData = this.createShadowTrajectory();
+            break;
+          default:
+            plotData = this.create3DVisualization();
+        }
+
+        Plotly.newPlot('plotly-div', plotData.data, plotData.layout, {
+          responsive: true,
+          displayModeBar: true
+        });
+      }
+
+      // 开始动画
+      startAnimation() {
+        if (this.isPlaying) return;
+        
+        this.isPlaying = true;
+        const animate = () => {
+          if (!this.isPlaying) return;
+          
+          this.currentTime += 0.1;
+          if (this.currentTime > 18) {
+            this.currentTime = 6;
+          }
+          
+          // 更新滑块和显示
+          document.getElementById('timeSlider').value = this.currentTime;
+          document.getElementById('timeValue').textContent = 
+            `${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`;
+          
+          this.updateVisualization();
+          
+          this.animationId = setTimeout(animate, 200);
+        };
+        
+        animate();
+      }
+
+      // 停止动画
+      stopAnimation() {
+        this.isPlaying = false;
+        if (this.animationId) {
+          clearTimeout(this.animationId);
+          this.animationId = null;
+        }
+      }
+    }
+
+    // 初始化可视化
+    document.addEventListener('DOMContentLoaded', () => {
+      new SundialVisualization();
+    });
+  </script>
+</body>
+</html>

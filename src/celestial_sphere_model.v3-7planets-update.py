@@ -412,6 +412,18 @@ def plot_geocentric_celestial_sphere(latitude, longitude, date_time,
         showlegend=True
     )
 
+    # 导出静态 HTML（统一配置+CDN）
+    from pathlib import Path
+    config = dict(displaylogo=False, scrollZoom=True, responsive=True)
+    project_root = Path(__file__).resolve().parent.parent
+    out_html = project_root / "app/modules/modern_astronomy/pages/celestial_sphere_model_plotly.html"
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fig.write_html(str(out_html), include_plotlyjs='cdn', full_html=True, config=config)
+        print(f"[ok] HTML 导出: {out_html}")
+    except Exception as e:
+        print(f"[warn] HTML 导出失败: {e}")
+
     fig.show()   # 打开交互视图（Jupyter/Notebook内联，或浏览器窗口）
 
 # =============== 入口 ===============

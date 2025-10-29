@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>天球球心可视化</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>天球球心可视化</h1>
+    <div class="header-actions"><a class="btn" href="/modern-astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section id="content" style="margin-top:12px;">
+      <p class="card-desc">占位页面：后续接入天球模型（Plotly 或 Three.js）。</p>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+  </script>
+</body>
+</html>

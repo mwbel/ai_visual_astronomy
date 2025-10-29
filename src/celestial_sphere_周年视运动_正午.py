@@ -337,7 +337,9 @@ def plot_body_annual_track(fig, body, body_name,
                            color,
                            observer, ts,
                            year: int,
-                           tz_name='Asia/Shanghai'):
+                           tz_name='Asia/Shanghai',
+                           obs_hour: int = 12,
+                           obs_minute: int = 0):
     """
     绘制天体的周年视运动轨迹（每天一个点，连成细线）
     - 取每天固定时刻（例如 12:00 本地时）
@@ -351,13 +353,13 @@ def plot_body_annual_track(fig, body, body_name,
     for month in range(1, 13):
         for day in range(1, 32):
             try:
-                local_time = datetime(year, month, day, 12, 0, tzinfo=local_tz)  # 固定每天12:00
+                local_time = datetime(year, month, day, obs_hour, obs_minute, tzinfo=local_tz)  # 每天固定时刻
             except ValueError:
                 continue  # 跳过无效日期
 
             # 转UTC
             utc_time = local_time.astimezone(ZoneInfo('UTC'))
-            t = ts.utc(utc_time.year, utc_time.month, utc_time.day, utc_time.hour)
+            t = ts.utc(utc_time.year, utc_time.month, utc_time.day, utc_time.hour + utc_time.minute/60)
 
             # alt/az
             alt, az, _ = observer.at(t).observe(body).apparent().altaz()
@@ -467,8 +469,17 @@ def plot_geocentric_celestial_sphere(latitude, longitude, date_time,
             fig, body_obj, cname,
             day_col,
             observer, ts,
-            year, tz_name=tz_name
+            year, tz_name=tz_name,
+            obs_hour=obs_hour, obs_minute=obs_minute
         )
+
+    # 输出为可在静态服务器预览的HTML
+    try:
+        output_path = "/Users/Min369/Documents/同步空间/Manju/Projects/AlVisualization/ai_visual_astronomy/app/modules/modern_astronomy/pages/planetary_annual_motion_plotly.html"
+        fig.write_html(output_path, include_plotlyjs='cdn', full_html=True)
+        print(f"已生成周年视运动页面: {output_path}")
+    except Exception as e:
+        print(f"写出HTML失败: {e}")
 
     fig.show()   # 打开交互视图（Jupyter/Notebook内联，或浏览器窗口）
     

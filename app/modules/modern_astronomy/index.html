@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>现代天文学可视化 · 术语目录</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>现代天文学可视化</h1>
+    <a class="btn" href="/app/index.html">返回应用入口</a>
+  </header>
+  <main class="container">
+    <section class="toolbar">
+      <input id="searchInput" class="search" type="text" placeholder="搜索术语或页面…" />
+    </section>
+    <section id="cards" class="card-grid">
+      <a class="card" data-keywords="太阳 行星 周日 视运动" href="/app/modules/modern_astronomy/pages/planetary_daily_motion.html">
+        <div class="card-title">行星实时周日视运动轨迹</div>
+        <div class="card-desc">按地点/日期展示太阳与行星的日周轨迹（占位）</div>
+      </a>
+      <a class="card" data-keywords="太阳 行星 年视运动 周年" href="/app/modules/modern_astronomy/pages/planetary_annual_motion.html">
+        <div class="card-title">行星正午周年视运动轨迹</div>
+        <div class="card-desc">全年不同日期的视运动（占位）</div>
+      </a>
+      <a class="card" data-keywords="月亮 月相 实时" href="/app/modules/modern_astronomy/pages/lunar_phase.html">
+        <div class="card-title">实时月相</div>
+        <div class="card-desc">照明比例、相位名称与明暗盘</div>
+      </a>
+      <a class="card" data-keywords="天球 球心 可视化" href="/app/modules/modern_astronomy/pages/celestial_center.html">
+        <div class="card-title">天球球心可视化</div>
+        <div class="card-desc">地心天球参考框架（占位）</div>
+      </a>
+      <a class="card" data-keywords="太阳 杆影 影长 日晷" href="/app/modules/modern_astronomy/pages/solar_shadow.html">
+        <div class="card-title">杆子影长变化</div>
+        <div class="card-desc">随时间变化的影长与方位（占位）</div>
+      </a>
+      <a class="card" data-keywords="晨昏线 terminator 地球自转" href="/app/modules/modern_astronomy/pages/twilight_line.html">
+        <div class="card-title">晨昏线</div>
+        <div class="card-desc">地球昼夜分界线与自转（占位）</div>
+      </a>
+      <a class="card" data-keywords="日晷 可视化" href="/app/modules/modern_astronomy/pages/sundial.html">
+        <div class="card-title">日晷可视化</div>
+        <div class="card-desc">日晷几何与时间刻度（占位）</div>
+      </a>
+      <a class="card" data-keywords="纬度 星空 可视化 比较" href="/app/modules/modern_astronomy/pages/latitude_stars.html">
+        <div class="card-title">不同纬度的星空可视化</div>
+        <div class="card-desc">交互式展示不同纬度地区的星空差异，包含天空视图、纬度对比和星座分布</div>
+      </a>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/SearchBox.js"></script>
+  <script>SearchBox.initSearchBox('#searchInput','#cards');</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>实时周日视运动轨迹</title>
+  <link rel="stylesheet" href="/assets/css/app.css" />
+  <style>
+    .panel { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    canvas { width: 100%; height: 520px; background: #0a0d12; border-radius: 8px; }
+    .legend { color: var(--muted); font-size: 12px; margin-top: 8px; display:flex; gap:12px; }
+    .legend .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>实时周日视运动轨迹（Az/Alt）</h1>
+    <div class="header-actions">
+      <a class="btn" href="/app/astronomy_visualization/modern_astronomy/index.html">返回模块</a>
+      <button id="toggleTheme" class="btn">切换主题</button>
+    </div>
+  </header>
+  
+  <main class="container">
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <label>纬度 (°)：<input id="lat" type="number" step="0.0001" value="39.9042" /></label>
+        </div>
+        <div class="row">
+          <label>经度 (°)：<input id="lon" type="number" step="0.0001" value="116.4074" /></label>
+        </div>
+        <div class="row">
+          <label>日期：<input id="date" type="date" /></label>
+        </div>
+        <div class="row">
+          <label>时间：<input id="time" type="time" step="60" /></label>
+        </div>
+        <div class="row">
+          <label>时区 (UTC±)：<input id="tz" type="number" step="0.5" /></label>
+        </div>
+        <div class="row">
+          <button id="nowBtn" class="btn">设为当前时间</button>
+          <button id="renderBtn" class="btn">更新轨迹</button>
+        </div>
+        <div class="row" style="color:var(--muted); font-size:12px;">
+          方位角 Azimuth 0–360°，高度角 Altitude -10–90°。
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="plot"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:#4db8ff"></span> 今日全天太阳轨迹</span>
+          <span><span class="dot" style="background:#7bd389"></span> 当前时刻位置</span>
+          <span><span class="dot" style="background:#ffcc66"></span> 日出/日落点</span>
+        </div>
+      </div>
+    </section>
+  </main>
+  
+  <footer class="app-footer">
+    <span>© 2025 Modern Astronomy · Az/Alt 可视化</span>
+  </footer>
+
+  <script src="/assets/js/app.js"></script>
+  <script src="/assets/js/astro_math.js"></script>
+  <script src="/assets/js/daily_motion.js"></script>
+</body>
+</html>

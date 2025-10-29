@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>太阳周年视运动轨迹</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .controls label, .controls input, .controls button, .controls select { font-size: 14px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    canvas { width: 100%; height: 520px; background: #0a0d12; border-radius: 8px; }
+    .legend { color: var(--muted); font-size: 14px; margin-top: 8px; display:flex; gap:12px; }
+    .legend .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+    @media (max-width: 900px) {
+      .panel { grid-template-columns: 1fr; }
+      canvas { height: 420px; }
+    }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>太阳周年视运动轨迹</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <!-- 移除重复的纬度/经度输入，统一使用顶栏地点选择器 -->
+          <!-- <label>纬度 (°)：<input id="lat" type="number" step="0.0001" value="39.9042" /></label>
+          <label>经度 (°)：<input id="lon" type="number" step="0.0001" value="116.4074" /></label> -->
+        </div>
+        <div class="row">
+          <label>年份：<input id="year" type="number" min="2020" max="2030" value="2025" /></label>
+        </div>
+        <div class="row">
+          <label>时间滑块：<input id="hourRange" type="range" min="0" max="23" value="12" /></label>
+          <span id="timeDisplay">12:00</span>
+        </div>
+        <div class="row">
+          <button id="minusHour" class="btn">-1小时</button>
+          <button id="plusHour" class="btn">+1小时</button>
+          <button id="renderBtn" class="btn">更新轨迹</button>
+        </div>
+        <div class="row" style="color:var(--muted); font-size:14px;">
+          显示太阳在一年中不同日期的正午位置轨迹，滑块控制时间。
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="plot"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:#ffcc66"></span> 太阳周年轨迹</span>
+          <span><span class="dot" style="background:#ff6b6b"></span> 当前时刻位置</span>
+          <span><span class="dot" style="background:#4db8ff"></span> 季节标记点</span>
+        </div>
+      </div>
+    </section>
+  </main>
+  <section class="panel3d">
+    <div class="canvas-wrap">
+      <div id="celestial3dContainer" style="width:100%; height:560px; background:#0a0d12; border-radius:8px; overflow:hidden;"></div>
+      <div class="legend" style="justify-content: space-between; align-items:center;">
+        <div style="color:var(--muted)">3D 天球视角（太阳、月亮、七大行星周日视运动） <span id="overlay3d" style="margin-left:12px;">时间：--:--</span></div>
+        <a class="btn" target="_blank" href="/app/modules/modern_astronomy/pages/celestial_sphere_model_plotly.html">新窗口打开</a>
+      </div>
+    </div>
+  </section>
+  <div style="text-align: center; padding: 16px;">
+    <a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a>
+  </div>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script src="/assets/js/astro_math.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    // 加载 3D 天球（改为 iframe 嵌入，避免脚本注入问题）
+    let lastLoad3dAt = 0;
+    function load3d(){
+      const now = Date.now();
+      if (now - lastLoad3dAt < 250) return; // 简单节流，避免重复刷新导致加载中止
+      lastLoad3dAt = now;
+      const tzNum = -new Date().getTimezoneOffset()/60;
+      const tz = String(tzNum);
+      const hour = document.getElementById('hourRange').value;
+      const dateEl = document.querySelector('#dateContainer select');
+      const dateStr = dateEl ? dateEl.value : '';
+      const lat = document.querySelector('#locationContainer input[name="latitude"]')?.value || '31.23';
+      const lon = document.querySelector('#locationContainer input[name="longitude"]')?.value || '121.47';
+      const qs = new URLSearchParams({ lat, lon, tz, date: dateStr, time: `${hour}:00`, cb: String(Date.now()) });
+      const iframeUrl = `/app/modules/modern_astronomy/pages/celestial_sphere_model_plotly.html?${qs.toString()}`;
+      document.getElementById('celestial3dContainer').innerHTML = `<iframe id="celestial3d" src="${iframeUrl}" frameborder="0" scrolling="no" style="width:100%;height:100%;"></iframe>`;
+      const overlay = document.getElementById('overlay3d');
+      if (overlay) overlay.textContent = `时间：${dateStr || '--'} ${hour}:00 ${tz>=0?`UTC+${tz}`:`UTC${tz}`}，地点：${lat}°, ${lon}°`;
+    }
+
+    window.addEventListener('resize', load3d);
+    // 顶栏与控件事件联动 3D iframe 刷新
+    document.getElementById('hourRange').addEventListener('input', load3d);
+    document.getElementById('minusHour').addEventListener('click', ()=>{ load3d(); });
+    document.getElementById('plusHour').addEventListener('click', ()=>{ load3d(); });
+    const dateSelect = document.querySelector('#dateContainer select');
+    if (dateSelect) dateSelect.addEventListener('change', load3d);
+    const locContainer = document.querySelector('#locationContainer');
+    if (locContainer){
+      locContainer.addEventListener('location-change', load3d);
+    }
+
+      class SolarAnnualMotion {
+        constructor() {
+        this.canvas = document.getElementById('plot');
+        this.ctx = this.canvas.getContext('2d');
+        this.lat = 39.9042;
+        this.lon = 116.4074;
+        this.year = 2025;
+        this.tz = -new Date().getTimezoneOffset()/60;
+        this.hour = 12;
+        this.setupCanvas();
+        this.bindEvents();
+        window.addEventListener('resize', () => {
+          this.setupCanvas();
+          this.render();
+        });
+        this.render();
+      }
+
+      setupCanvas() {
+        const rect = this.canvas.getBoundingClientRect();
+        this.canvas.width = rect.width * devicePixelRatio;
+        this.canvas.height = rect.height * devicePixelRatio;
+        this.ctx.scale(devicePixelRatio, devicePixelRatio);
+        this.width = rect.width;
+        this.height = rect.height;
+      }
+
+      bindEvents() {
+        // 改用顶栏地点选择器的事件
+        const locContainer = document.querySelector('#locationContainer');
+        if (locContainer){
+          locContainer.addEventListener('location-change', (e)=>{
+            const { lat, lon } = e.detail || {};
+            if (lat!=null) this.lat = parseFloat(lat);
+            if (lon!=null) this.lon = parseFloat(lon);
+            this.render();
+          });
+          // 初始化一次
+          const latEl = locContainer.querySelector('input[name="latitude"]');
+          const lonEl = locContainer.querySelector('input[name="longitude"]');
+          if (latEl) this.lat = parseFloat(latEl.value || this.lat);
+          if (lonEl) this.lon = parseFloat(lonEl.value || this.lon);
+        }
+        document.getElementById('year').addEventListener('input', (e) => {
+          this.year = parseInt(e.target.value);
+          this.render();
+        });
+
+        document.getElementById('hourRange').addEventListener('input', (e) => {
+          this.hour = parseInt(e.target.value);
+          document.getElementById('timeDisplay').textContent = `${this.hour}:00`;
+          this.render();
+        });
+        document.getElementById('minusHour').addEventListener('click', () => {
+          this.hour = Math.max(0, this.hour - 1);
+          document.getElementById('hourRange').value = this.hour;
+          document.getElementById('timeDisplay').textContent = `${this.hour}:00`;
+          this.render();
+        });
+        document.getElementById('plusHour').addEventListener('click', () => {
+          this.hour = Math.min(23, this.hour + 1);
+          document.getElementById('hourRange').value = this.hour;
+          document.getElementById('timeDisplay').textContent = `${this.hour}:00`;
+          this.render();
+        });
+        document.getElementById('renderBtn').addEventListener('click', () => {
+          this.render();
+        });
+      }
+
+      render() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.drawGrid();
+        this.drawSolarTrajectory();
+      }
+
+      drawGrid() {
+        this.ctx.strokeStyle = '#333';
+        this.ctx.lineWidth = 1;
+        
+        // 绘制方位角网格线 (0-360°)
+        for (let az = 0; az <= 360; az += 30) {
+          const x = (az / 360) * this.width;
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, 0);
+          this.ctx.lineTo(x, this.height);
+          this.ctx.stroke();
+          
+          // 标签
+          this.ctx.fillStyle = '#666';
+          this.ctx.font = '14px Arial';
+          this.ctx.fillText(`${az}°`, x + 2, 15);
+        }
+        
+        // 绘制高度角网格线 (-10 to 90°)
+        for (let alt = -10; alt <= 90; alt += 10) {
+          const y = this.height - ((alt + 10) / 100) * this.height;
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, y);
+          this.ctx.lineTo(this.width, y);
+          this.ctx.stroke();
+          
+          // 标签
+          this.ctx.fillStyle = '#666';
+          this.ctx.font = '14px Arial';
+          this.ctx.fillText(`${alt}°`, 2, y - 2);
+        }
+        
+        // 地平线
+        const horizonY = this.height - ((0 + 10) / 100) * this.height;
+        this.ctx.strokeStyle = '#666';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, horizonY);
+        this.ctx.lineTo(this.width, horizonY);
+        this.ctx.stroke();
+      }
+
+      drawSolarTrajectory() {
+        const points = [];
+        
+        // 计算一年中每个月21日的太阳位置
+        for (let month = 1; month <= 12; month++) {
+          const date = new Date(this.year, month - 1, 21, this.hour, 0, 0);
+          const sunPos = AstroMath.solarPosition(date, this.lat, this.lon, this.tz);
+          
+          if (sunPos.altitude > -10) { // 只显示高度角大于-10°的点
+            points.push({
+              azimuth: sunPos.azimuth,
+              altitude: sunPos.altitude,
+              month: month,
+              date: date
+            });
+          }
+        }
+        
+        // 绘制轨迹线
+        if (points.length > 1) {
+          this.ctx.strokeStyle = '#ffcc66';
+          this.ctx.lineWidth = 3;
+          this.ctx.beginPath();
+          
+          points.forEach((point, index) => {
+            const x = (point.azimuth / 360) * this.width;
+            const y = this.height - ((point.altitude + 10) / 100) * this.height;
+            
+            if (index === 0) {
+              this.ctx.moveTo(x, y);
+            } else {
+              this.ctx.lineTo(x, y);
+            }
+          });
+          this.ctx.stroke();
+        }
+        
+        // 绘制季节标记点
+        const seasonalPoints = [
+          { month: 3, name: '春分', color: '#4db8ff' },
+          { month: 6, name: '夏至', color: '#4db8ff' },
+          { month: 9, name: '秋分', color: '#4db8ff' },
+          { month: 12, name: '冬至', color: '#4db8ff' }
+        ];
+        
+        seasonalPoints.forEach(season => {
+          const point = points.find(p => p.month === season.month);
+          if (point) {
+            const x = (point.azimuth / 360) * this.width;
+            const y = this.height - ((point.altitude + 10) / 100) * this.height;
+            
+            this.ctx.fillStyle = season.color;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 6, 0, 2 * Math.PI);
+            this.ctx.fill();
+            
+            // 标签
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = '14px Arial';
+            this.ctx.fillText(season.name, x + 8, y - 8);
+          }
+        });
+        
+        // 绘制当前时刻位置（当前日期）
+        const now = new Date();
+        const currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), this.hour, 0, 0);
+        const currentSunPos = AstroMath.solarPosition(currentDate, this.lat, this.lon, this.tz);
+        
+        if (currentSunPos.altitude > -10) {
+          const x = (currentSunPos.azimuth / 360) * this.width;
+          const y = this.height - ((currentSunPos.altitude + 10) / 100) * this.height;
+          
+          this.ctx.fillStyle = '#ff6b6b';
+          this.ctx.beginPath();
+          this.ctx.arc(x, y, 8, 0, 2 * Math.PI);
+          this.ctx.fill();
+          
+          // 当前位置标签
+          this.ctx.fillStyle = '#fff';
+          this.ctx.font = '14px Arial';
+          this.ctx.fillText('当前', x + 10, y - 10);
+        }
+      }
+
+      dateToJulianDay(date) {
+        const a = Math.floor((14 - (date.getMonth() + 1)) / 12);
+        const y = date.getFullYear() + 4800 - a;
+        const m = (date.getMonth() + 1) + 12 * a - 3;
+        return date.getDate() + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045 + (date.getHours() - 12) / 24;
+      }
+    }
+
+    // 初始化
+    new SolarAnnualMotion();
+    load3d();
+  </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>藏历历算可视化</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+    .card { border:1px solid var(--border); border-radius:12px; padding:12px; background:var(--card-bg-dark); }
+    .card h3 { margin:0 0 8px; }
+    .card p { color:var(--muted); font-size:14px; }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>藏历历算可视化</h1>
+    <div class="header-actions">
+      <a class="btn" href="/">返回站点首页</a>
+      <a class="btn" href="/app/modules/modern_astronomy/">现代天文学可视化</a>
+    </div>
+  </header>
+  <main class="container">
+    <section class="panel">
+      <div class="card">
+        <p>基于天球模型的藏历核心概念交互式展示。以下页面均为 3D 天球视角，可与地点与日期选择器联动（如页面提供）。</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>天球坐标与地平/赤道/黄道</h3>
+          <p>展示地平面、赤道面与黄道面及其夹角关系。</p>
+          <a class="btn" href="/app/modules/tibetan_calendar/pages/sky_coordinates.html">进入页面</a>
+        </div>
+        <div class="card">
+          <h3>太阳黄经与四季节点</h3>
+          <p>沿黄道显示太阳黄经与春分、夏至、秋分、冬至。</p>
+          <a class="btn" href="/app/modules/tibetan_calendar/pages/solar_longitude_seasons.html">进入页面</a>
+        </div>
+        <div class="card">
+          <h3>朔望与月相（藏历月日）</h3>
+          <p>以月龄控制月亮与太阳的伸距，展示相位变化。</p>
+          <a class="btn" href="/app/modules/tibetan_calendar/pages/lunar_phase_synodic.html">进入页面</a>
+        </div>
+        <div class="card">
+          <h3>二十七宿分区</h3>
+          <p>沿黄道划分 27 等分，定位月亮所处之宿。</p>
+          <a class="btn" href="/app/modules/tibetan_calendar/pages/nakshatra_divisions.html">进入页面</a>
+        </div>
+        <div class="card">
+          <h3>五要素概念（示意）</h3>
+          <p>给定地点、年份与月份，下拉选择；日期用滑块，太阳月亮落在五要素分区。</p>
+          <a class="btn" href="/app/modules/tibetan_calendar/pages/five_elements_concepts.html">进入页面</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Tibetan Calendar Visualization</footer>
+</body>
+</html>

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>晨昏线</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>晨昏线</h1>
+    <div class="header-actions"><a class="btn" href="/modern-astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section id="content" style="margin-top:12px;">
+      <div class="visualization-container">
+        <div class="control-panel">
+          <div class="control-group">
+            <label for="timeSlider">时间 (小时):</label>
+            <input type="range" id="timeSlider" min="0" max="23" step="1" value="12">
+            <span id="timeValue">12:00</span>
+          </div>
+          <div class="control-group">
+            <label for="viewMode">显示模式:</label>
+            <select id="viewMode">
+              <option value="3d">3D地球</option>
+              <option value="2d">2D投影</option>
+              <option value="animation">动画演示</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <button id="playBtn" class="btn btn-primary">播放动画</button>
+            <button id="pauseBtn" class="btn btn-secondary">暂停</button>
+          </div>
+        </div>
+        
+        <div id="visualization" class="plot-container">
+          <div id="plotly-div" style="width: 100%; height: 600px;"></div>
+        </div>
+        
+        <div class="info-panel">
+          <h3>晨昏线说明</h3>
+          <ul>
+            <li><strong>晨昏线</strong>: 地球上日夜分界线，将地球分为白昼和黑夜两部分</li>
+            <li><strong>晨线</strong>: 从夜晚进入白昼的分界线（东侧）</li>
+            <li><strong>昏线</strong>: 从白昼进入夜晚的分界线（西侧）</li>
+            <li><strong>季节变化</strong>: 晨昏线的位置随季节变化，影响各地的昼夜长短</li>
+            <li><strong>极昼极夜</strong>: 在极地地区，某些时期会出现极昼或极夜现象</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    // 晨昏线可视化类
+    class TwilightLineVisualization {
+      constructor() {
+        this.currentTime = 12;
+        this.currentDate = new Date();
+        this.viewMode = '3d';
+        this.animationId = null;
+        this.isPlaying = false;
+        
+        this.initializeControls();
+        this.updateVisualization();
+      }
+
+      initializeControls() {
+        const timeSlider = document.getElementById('timeSlider');
+        const timeValue = document.getElementById('timeValue');
+        const viewMode = document.getElementById('viewMode');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+
+        timeSlider.addEventListener('input', (e) => {
+          this.currentTime = parseFloat(e.target.value);
+          timeValue.textContent = `${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`;
+          if (!this.isPlaying) {
+            this.updateVisualization();
+          }
+        });
+
+        viewMode.addEventListener('change', (e) => {
+          this.viewMode = e.target.value;
+          this.updateVisualization();
+        });
+
+        playBtn.addEventListener('click', () => this.startAnimation());
+        pauseBtn.addEventListener('click', () => this.stopAnimation());
+
+        // 监听日期选择器变化
+        document.addEventListener('dateChanged', (e) => {
+          this.currentDate = new Date(e.detail.date);
+          this.updateVisualization();
+        });
+      }
+
+      // 计算太阳赤纬角
+      calculateSolarDeclination(dayOfYear) {
+        return 23.45 * Math.sin(Math.PI * (284 + dayOfYear) / 180);
+      }
+
+      // 计算太阳时角
+      calculateHourAngle(longitude, time) {
+        return 15 * (time - 12) + longitude;
+      }
+
+      // 计算晨昏线
+      calculateTwilightLine() {
+        const dayOfYear = Math.floor((this.currentDate - new Date(this.currentDate.getFullYear(), 0, 0)) / 86400000);
+        const declination = this.calculateSolarDeclination(dayOfYear) * Math.PI / 180;
+        
+        const longitudes = [];
+        const latitudes = [];
+        
+        // 计算晨昏线上的点
+        for (let lon = -180; lon <= 180; lon += 2) {
+          const hourAngle = this.calculateHourAngle(lon, this.currentTime) * Math.PI / 180;
+          
+          // 计算该经度上晨昏线的纬度
+          const cosLat = -Math.tan(declination) / Math.tan(hourAngle);
+          
+          if (Math.abs(cosLat) <= 1) {
+            const lat = Math.acos(Math.abs(cosLat)) * 180 / Math.PI;
+            longitudes.push(lon);
+            latitudes.push(cosLat > 0 ? lat : -lat);
+          }
+        }
+        
+        return { longitudes, latitudes };
+      }
+
+      // 创建3D地球可视化
+      create3DVisualization() {
+        const twilightLine = this.calculateTwilightLine();
+        
+        // 创建地球表面
+        const earthSurface = {
+          type: 'surface',
+          x: [],
+          y: [],
+          z: [],
+          colorscale: [
+            [0, 'rgb(0, 0, 100)'],    // 深蓝色 (夜晚)
+            [0.5, 'rgb(100, 100, 200)'], // 浅蓝色 (黄昏)
+            [1, 'rgb(255, 255, 100)']  // 黄色 (白天)
+          ],
+          showscale: false,
+          opacity: 0.8
+        };
+
+        // 生成地球网格
+        const lats = [];
+        const lons = [];
+        for (let lat = -90; lat <= 90; lat += 10) {
+          lats.push(lat);
+        }
+        for (let lon = -180; lon <= 180; lon += 10) {
+          lons.push(lon);
+        }
+
+        // 计算每个点的光照强度
+        const dayOfYear = Math.floor((this.currentDate - new Date(this.currentDate.getFullYear(), 0, 0)) / 86400000);
+        const declination = this.calculateSolarDeclination(dayOfYear) * Math.PI / 180;
+
+        for (let i = 0; i < lats.length; i++) {
+          const xRow = [];
+          const yRow = [];
+          const zRow = [];
+          
+          for (let j = 0; j < lons.length; j++) {
+            const lat = lats[i] * Math.PI / 180;
+            const lon = lons[j] * Math.PI / 180;
+            const hourAngle = this.calculateHourAngle(lons[j], this.currentTime) * Math.PI / 180;
+            
+            // 球面坐标转换为笛卡尔坐标
+            const x = Math.cos(lat) * Math.cos(lon);
+            const y = Math.cos(lat) * Math.sin(lon);
+            const z = Math.sin(lat);
+            
+            xRow.push(x);
+            yRow.push(y);
+            zRow.push(z);
+          }
+          
+          earthSurface.x.push(xRow);
+          earthSurface.y.push(yRow);
+          earthSurface.z.push(zRow);
+        }
+
+        // 晨昏线轨迹
+        const twilightTrace = {
+          type: 'scatter3d',
+          mode: 'lines',
+          x: twilightLine.longitudes.map(lon => Math.cos(0) * Math.cos(lon * Math.PI / 180)),
+          y: twilightLine.longitudes.map(lon => Math.cos(0) * Math.sin(lon * Math.PI / 180)),
+          z: twilightLine.latitudes.map(lat => Math.sin(lat * Math.PI / 180)),
+          line: {
+            color: 'red',
+            width: 5
+          },
+          name: '晨昏线'
+        };
+
+        const layout = {
+          title: `地球晨昏线 - ${this.currentDate.toLocaleDateString()} ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          scene: {
+            xaxis: { title: 'X', range: [-1.5, 1.5] },
+            yaxis: { title: 'Y', range: [-1.5, 1.5] },
+            zaxis: { title: 'Z', range: [-1.5, 1.5] },
+            aspectmode: 'cube',
+            bgcolor: 'rgb(0, 0, 0)'
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0)',
+          font: { color: 'white' }
+        };
+
+        return { data: [earthSurface, twilightTrace], layout };
+      }
+
+      // 创建2D投影可视化
+      create2DVisualization() {
+        const twilightLine = this.calculateTwilightLine();
+        
+        // 世界地图轮廓（简化版）
+        const worldMap = {
+          type: 'scatter',
+          mode: 'lines',
+          x: [-180, 180, 180, -180, -180],
+          y: [-90, -90, 90, 90, -90],
+          line: { color: 'gray', width: 1 },
+          name: '地图边界',
+          showlegend: false
+        };
+
+        // 晨昏线
+        const twilightTrace = {
+          type: 'scatter',
+          mode: 'lines+markers',
+          x: twilightLine.longitudes,
+          y: twilightLine.latitudes,
+          line: { color: 'red', width: 3 },
+          marker: { color: 'red', size: 4 },
+          name: '晨昏线'
+        };
+
+        // 添加网格线
+        const gridLines = [];
+        for (let lat = -90; lat <= 90; lat += 30) {
+          gridLines.push({
+            type: 'scatter',
+            mode: 'lines',
+            x: [-180, 180],
+            y: [lat, lat],
+            line: { color: 'rgba(255,255,255,0.3)', width: 1 },
+            showlegend: false
+          });
+        }
+        
+        for (let lon = -180; lon <= 180; lon += 30) {
+          gridLines.push({
+            type: 'scatter',
+            mode: 'lines',
+            x: [lon, lon],
+            y: [-90, 90],
+            line: { color: 'rgba(255,255,255,0.3)', width: 1 },
+            showlegend: false
+          });
+        }
+
+        const layout = {
+          title: `晨昏线投影图 - ${this.currentDate.toLocaleDateString()} ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          xaxis: {
+            title: '经度 (°)',
+            range: [-180, 180],
+            dtick: 30,
+            gridcolor: 'rgba(255,255,255,0.3)'
+          },
+          yaxis: {
+            title: '纬度 (°)',
+            range: [-90, 90],
+            dtick: 30,
+            gridcolor: 'rgba(255,255,255,0.3)'
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0.8)',
+          font: { color: 'white' }
+        };
+
+        return { data: [worldMap, ...gridLines, twilightTrace], layout };
+      }
+
+      // 更新可视化
+      updateVisualization() {
+        let plotData;
+        
+        switch (this.viewMode) {
+          case '3d':
+            plotData = this.create3DVisualization();
+            break;
+          case '2d':
+            plotData = this.create2DVisualization();
+            break;
+          case 'animation':
+            plotData = this.create2DVisualization();
+            break;
+          default:
+            plotData = this.create3DVisualization();
+        }
+
+        Plotly.newPlot('plotly-div', plotData.data, plotData.layout, {
+          responsive: true,
+          displayModeBar: true
+        });
+      }
+
+      // 开始动画
+      startAnimation() {
+        if (this.isPlaying) return;
+        
+        this.isPlaying = true;
+        const animate = () => {
+          if (!this.isPlaying) return;
+          
+          this.currentTime += 0.1;
+          if (this.currentTime >= 24) {
+            this.currentTime = 0;
+          }
+          
+          // 更新滑块和显示
+          document.getElementById('timeSlider').value = this.currentTime;
+          document.getElementById('timeValue').textContent = 
+            `${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`;
+          
+          this.updateVisualization();
+          
+          this.animationId = setTimeout(animate, 100);
+        };
+        
+        animate();
+      }
+
+      // 停止动画
+      stopAnimation() {
+        this.isPlaying = false;
+        if (this.animationId) {
+          clearTimeout(this.animationId);
+          this.animationId = null;
+        }
+      }
+    }
+
+    // 初始化可视化
+    document.addEventListener('DOMContentLoaded', () => {
+      new TwilightLineVisualization();
+    });
+  </script>
+</body>
+</html>

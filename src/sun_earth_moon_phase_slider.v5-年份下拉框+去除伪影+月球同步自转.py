@@ -270,7 +270,7 @@ fig.update_layout(
     scene_aspectmode="data",
     paper_bgcolor="black",
     plot_bgcolor="black",
-    font=dict(color="white"),
+    font=dict(color="white", family="SimHei, Arial, sans-serif"),
 
     # 播放 / 暂停按钮位置：放到进度条上方
     updatemenus=[{
@@ -318,5 +318,17 @@ fig.update_layout(scene_dragmode="orbit")
 fig.update_scenes(xaxis_range=[-AU_RANGE, AU_RANGE],
                   yaxis_range=[-AU_RANGE, AU_RANGE],
                   zaxis_range=[-AU_RANGE, AU_RANGE])
+
+# 统一交互配置并导出静态 HTML（CDN）
+from pathlib import Path
+config = dict(displaylogo=False, scrollZoom=True, responsive=True)
+project_root = Path(__file__).resolve().parent.parent
+out_html = project_root / "app/modules/modern_astronomy/pages/sun_earth_moon_phase_slider_plotly.html"
+out_html.parent.mkdir(parents=True, exist_ok=True)
+try:
+    fig.write_html(str(out_html), include_plotlyjs='cdn', full_html=True, config=config)
+    print(f"[ok] HTML 导出: {out_html}")
+except Exception as e:
+    print(f"[warn] HTML 导出失败: {e}")
 
 fig.show()

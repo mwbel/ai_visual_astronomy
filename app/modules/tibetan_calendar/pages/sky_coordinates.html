@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>天球坐标与地平/赤道/黄道</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display:grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    #plot { width: 100%; height: 560px; background:#0a0d12; border-radius:8px; }
+    @media (max-width: 900px) { .panel { grid-template-columns: 1fr; } #plot { height: 460px; } }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>天球坐标与地平/赤道/黄道</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/tibetan_calendar/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <label>纬度(°)：<input id="lat" type="number" step="0.1" min="-90" max="90" value="31.23"></label>
+          <button id="apply" class="btn">应用</button>
+        </div>
+        <div class="row" style="color:var(--muted); font-size:14px;">
+          显示：地平面(灰)、赤道面(蓝)、黄道面(橙，倾角≈23.44°)。
+        </div>
+      </div>
+      <div class="canvas-wrap"><div id="plot"></div></div>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Tibetan Calendar Visualization</footer>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script>
+    BackButton.renderBackButton('#backContainer','/app/modules/tibetan_calendar/');
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    function render(lat){
+      const traces = [];
+      // 天球半球
+      const N=50, R=1; const X=[],Y=[],Zt=[],Zb=[];
+      for(let i=0;i<N;i++){ X.push([]); Y.push([]); Zt.push([]); Zb.push([]); for(let j=0;j<N;j++){ const x=-R+2*R*j/(N-1); const y=-R+2*R*i/(N-1); const r2=x*x+y*y; const z=r2<=1?Math.sqrt(1-r2):NaN; X[i].push(x); Y[i].push(y); Zt[i].push(z); Zb[i].push(r2<=1?-Math.sqrt(1-r2):NaN);} }
+      traces.push({type:'surface',x:X,y:Y,z:Zt,showscale:false,opacity:0.24,colorscale:[[0,'#2b3b55'],[1,'#2b3b55']],name:'天球上半'});
+      traces.push({type:'surface',x:X,y:Y,z:Zb,showscale:false,opacity:0.24,colorscale:[[0,'#2b3b55'],[1,'#2b3b55']],name:'天球下半'});
+
+      // 地平面 (受纬度影响，仅示意放置于 z=0)
+      const P=50, pr=1.0; const Hx=[],Hy=[],Hz=[]; for(let i=0;i<P;i++){ Hx.push([]); Hy.push([]); Hz.push([]); for(let j=0;j<P;j++){ const x=-pr+2*pr*j/(P-1); const y=-pr+2*pr*i/(P-1); Hx[i].push(x); Hy[i].push(y); Hz[i].push(0); }}
+      traces.push({type:'surface',x:Hx,y:Hy,z:Hz,showscale:false,opacity:0.35,colorscale:[[0,'#6b7280'],[1,'#6b7280']],name:'地平面'});
+
+      // 赤道面 (z=0 的圆环)
+      const eqX=[],eqY=[],eqZ=[]; for(let k=0;k<=360;k++){ const t=Math.PI*k/180; eqX.push(Math.cos(t)); eqY.push(Math.sin(t)); eqZ.push(0); }
+      traces.push({type:'scatter3d',x:eqX,y:eqY,z:eqZ,mode:'lines',line:{color:'#60a5fa',width:3},name:'天球赤道'});
+
+      // 黄道面 (相对赤道倾斜 23.44°)
+      const tilt=23.44*Math.PI/180; const eclX=[],eclY=[],eclZ=[]; for(let k=0;k<=360;k++){ const t=Math.PI*k/180; const x=Math.cos(t); const y=Math.sin(t)*Math.cos(tilt); const z=Math.sin(t)*Math.sin(tilt); eclX.push(x); eclY.push(y); eclZ.push(z); }
+      traces.push({type:'scatter3d',x:eclX,y:eclY,z:eclZ,mode:'lines',line:{color:'#f59e0b',width:3},name:'黄道'});
+
+      // 北天极 (随纬度方向)
+      const latRad=lat*Math.PI/180; const pole={x:0,y:Math.cos(latRad),z:Math.sin(latRad)};
+      traces.push({type:'scatter3d',x:[0,pole.x],y:[0,pole.y],z:[0,pole.z],mode:'lines',line:{color:'#ff6b6b',width:4},name:`北天极 (φ=${lat}°)`});
+
+      const layout={ title:`坐标关系 (纬度 ${lat}°)`, scene:{ xaxis:{title:'东(+)西(-)'}, yaxis:{title:'北(+)南(-)'}, zaxis:{title:'天顶(+)地心(-)'}, aspectmode:'cube', bgcolor:'rgb(0,0,0)' }, template:'plotly_dark', font:{ color:'#1E3A8A'} };
+      Plotly.newPlot('plot', traces, layout);
+    }
+
+    const latEl=document.getElementById('lat');
+    document.getElementById('apply').addEventListener('click',()=>render(parseFloat(latEl.value||'31.23')));
+    render(parseFloat(latEl.value||'31.23'));
+  </script>
+</body>
+</html>

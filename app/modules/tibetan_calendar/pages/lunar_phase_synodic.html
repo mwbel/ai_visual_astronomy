@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>朔望与月相（藏历月日）</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display:grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    #plot { width: 100%; height: 560px; background:#0a0d12; border-radius:8px; }
+    @media (max-width: 900px) { .panel { grid-template-columns: 1fr; } #plot { height: 460px; } }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>朔望与月相（藏历月日）</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/tibetan_calendar/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <label>月龄 (天)：<input id="age" type="range" min="0" max="29.53" step="0.01" value="0"/></label>
+          <span id="ageLabel">0.00 天</span>
+        </div>
+        <div class="row" style="color:var(--muted); font-size:14px;">
+          以近似的匀速伸距模型：月亮相对太阳的黄经差 Δλ ≈ 12.19075°/天 × 月龄。
+        </div>
+        <div class="row" id="phaseText" style="font-weight:600"></div>
+      </div>
+      <div class="canvas-wrap"><div id="plot"></div></div>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Tibetan Calendar Visualization</footer>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script>
+    BackButton.renderBackButton('#backContainer','/app/modules/tibetan_calendar/');
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    const tilt=23.44*Math.PI/180;
+    function pointOnEcliptic(lon){ const t=lon*Math.PI/180; return { x:Math.cos(t), y:Math.sin(t)*Math.cos(tilt), z:Math.sin(t)*Math.sin(tilt) } }
+    function ecliptic(){ const X=[],Y=[],Z=[]; for(let k=0;k<=360;k++){ const t=Math.PI*k/180; X.push(Math.cos(t)); Y.push(Math.sin(t)*Math.cos(tilt)); Z.push(Math.sin(t)*Math.sin(tilt)); } return {X,Y,Z}; }
+
+    function phaseName(delta){ // delta in degrees [0,360)
+      if(delta<10||delta>=350) return '朔';
+      if(delta<80) return '娥眉月';
+      if(delta<100) return '上弦附近';
+      if(delta<170) return '盈凸月';
+      if(delta<190) return '望';
+      if(delta<260) return '亏凸月';
+      if(delta<280) return '下弦附近';
+      if(delta<350) return '残月';
+      return '朔';
+    }
+
+    function render(age){
+      const sunLon=0; // 简化：太阳位于 0°
+      const lunarRate=360/29.53059; // ~12.19075°/day
+      const moonLon=(sunLon + age*lunarRate)%360;
+      const delta=( (moonLon - sunLon+360)%360 );
+
+      const {X,Y,Z}=ecliptic();
+      const traces=[ {type:'scatter3d',x:X,y:Y,z:Z,mode:'lines',line:{color:'#f59e0b',width:4},name:'黄道'} ];
+      const s=pointOnEcliptic(sunLon); const m=pointOnEcliptic(moonLon);
+      traces.push({type:'scatter3d',x:[s.x],y:[s.y],z:[s.z],mode:'markers+text',marker:{size:8,color:'#fcd34d'},text:['太阳'],textposition:'top center',name:'太阳'});
+      traces.push({type:'scatter3d',x:[m.x],y:[m.y],z:[m.z],mode:'markers+text',marker:{size:8,color:'#93c5fd'},text:[`月亮 (${moonLon.toFixed(1)}°)`],textposition:'top center',name:'月亮'});
+      traces.push({type:'scatter3d',x:[s.x,m.x],y:[s.y,m.y],z:[s.z,m.z],mode:'lines',line:{color:'#60a5fa',dash:'dot'},name:'伸距'});
+
+      const frac=(1+Math.cos(delta*Math.PI/180))/2; // 受照分数
+      const lay={ title:`月龄 ${age.toFixed(2)} 天 | 伸距 Δλ=${delta.toFixed(1)}° | 受照分数≈${frac.toFixed(2)}`,
+        scene:{ xaxis:{title:'东(+)西(-)'}, yaxis:{title:'北(+)南(-)'}, zaxis:{title:'天顶(+)地心(-)'}, aspectmode:'cube', bgcolor:'rgb(0,0,0)' }, template:'plotly_dark', font:{ color:'#1E3A8A'} };
+      Plotly.newPlot('plot', traces, lay);
+      document.getElementById('phaseText').textContent = `相位：${phaseName(delta)} (近似)`;
+    }
+
+    const ageEl=document.getElementById('age'); const ageLabel=document.getElementById('ageLabel');
+    ageEl.addEventListener('input',()=>{ ageLabel.textContent=`${parseFloat(ageEl.value).toFixed(2)} 天`; render(parseFloat(ageEl.value)); });
+    render(0);
+  </script>
+</body>
+</html>

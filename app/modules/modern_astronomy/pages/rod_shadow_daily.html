@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>24小时杆影（3D半天球）</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <link rel="stylesheet" href="/assets/css/app.css" />
+  <style>
+    body { background: #0f172a; color: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .app-header { display: flex; align-items: center; justify-content: center; position: relative; padding: 12px 16px; background: #111827; border-bottom: 1px solid #1f2937; }
+    .app-header h1 { margin: 0; font-size: 18px; color: #93c5fd; }
+    .controls { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 12px; background: #111827; border: 1px solid #1f2937; border-radius: 8px; }
+    .controls label { font-size: 14px; color: #93c5fd; }
+    .controls input, .controls button, .controls select { font-size: 14px; padding: 6px 8px; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; }
+    .controls .wide { grid-column: span 2; }
+    .legend { font-size: 13px; color: #9ca3af; margin-top: 8px; }
+    #plot { width: 100%; height: 640px; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>3D 半天球 | 杆影 24小时变化</h1>
+  </header>
+  <div class="container">
+    <section class="controls">
+      <div>
+        <label>纬度(°N)</label>
+        <input id="lat" type="number" step="0.01" value="31.23" />
+      </div>
+      <div>
+        <label>经度(°E)</label>
+        <input id="lon" type="number" step="0.01" value="121.47" />
+      </div>
+      <div>
+        <label>海拔高度(m)</label>
+        <input id="alt" type="number" step="1" value="0" />
+      </div>
+      <div class="wide">
+        <label>日期</label>
+        <input id="date" type="date" />
+      </div>
+      <div class="wide">
+        <label>小时滑块</label>
+        <input id="hour" type="range" min="0" max="24" step="0.25" value="12" />
+        <div class="legend">拖动控制当前时刻；同步显示全天杆影轨迹</div>
+      </div>
+    </section>
+    <div id="plot"></div>
+    <div class="legend">
+      - 球心立一根垂直杆（长度=1m，示意单位），地面为半径1的地平面圆盘。<br/>
+      - 白天：绘制在地平面上的杆影；夜间：不显示（太阳在地平线以下）。
+    </div>
+  </div>
+
+  <script>
+    // ========== 简化太阳位置模型（带方程时差近似） ==========
+    function dayOfYear(d) {
+      const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const diff = (d - start) / 86400000; // ms→天
+      return Math.floor(diff) + 1;
+    }
+    function deg2rad(d){ return d*Math.PI/180; }
+    function rad2deg(r){ return r*180/Math.PI; }
+
+    // 近似：太阳赤纬（度）
+    function solarDeclination(doy){
+      return -23.44 * Math.cos(2*Math.PI*(doy + 10)/365); // 经典近似
+    }
+    // 方程时差（分钟）近似
+    function equationOfTimeMinutes(doy){
+      const B = 2*Math.PI*(doy - 81)/364;
+      return 9.87*Math.sin(2*B) - 7.53*Math.cos(B) - 1.5*Math.sin(B);
+    }
+
+    // 给定本地时刻与经纬、时区，返回太阳方位/高度（度）
+    function solarAzAltApprox(latDeg, lonDeg, dateLocal){
+      const tzOffsetHours = -dateLocal.getTimezoneOffset()/60; // 本地时区小时数
+      const doy = dayOfYear(new Date(Date.UTC(dateLocal.getFullYear(), dateLocal.getMonth(), dateLocal.getDate())));
+      const decl = deg2rad(solarDeclination(doy));
+      const lat = deg2rad(latDeg);
+      const eotMin = equationOfTimeMinutes(doy);
+      const timeMinutes = dateLocal.getHours()*60 + dateLocal.getMinutes() + dateLocal.getSeconds()/60;
+      const lonStd = tzOffsetHours * 15; // 时区中心经度
+      const timeOffsetMin = eotMin + 4*(lonDeg - lonStd);
+      const lstMinutes = timeMinutes + timeOffsetMin; // 当地真太阳时（分钟）
+      const H = deg2rad( (lstMinutes/60 - 12) * 15 ); // 时角（弧度）
+
+      const sinAlt = Math.sin(lat)*Math.sin(decl) + Math.cos(lat)*Math.cos(decl)*Math.cos(H);
+      const alt = Math.asin(sinAlt);
+      const cosAz = (Math.sin(decl) - Math.sin(alt)*Math.sin(lat))/(Math.cos(alt)*Math.cos(lat));
+      let az = Math.acos(Math.max(-1, Math.min(1, cosAz))); // 0..pi
+      // 通过时角符号区分东/西（H>0 下午，方位偏向西；H<0 上午，偏向东）
+      if (Math.sin(H) > 0) az = Math.PI*2 - az; // 变 0..2pi，0=北，90=东
+      return { azimuthDeg: rad2deg(az), altitudeDeg: rad2deg(alt) };
+    }
+
+    // 太阳单位向量（x东,y北,z上）
+    function sunUnitVector(azDeg, altDeg){
+      const az = deg2rad(azDeg), alt = deg2rad(altDeg);
+      const x = Math.cos(alt)*Math.sin(az);
+      const y = Math.cos(alt)*Math.cos(az);
+      const z = Math.sin(alt);
+      return { x, y, z };
+    }
+    // 杆影点：从杆顶(0,0,L)沿着 -s 方向与 z=0 的交点
+    function shadowPointOnGround(s, L=1){
+      if (s.z <= 0) return null; // 太阳在地平线以下，影子不形成
+      const t = L / s.z;
+      return { x: -t*s.x, y: -t*s.y, z: 0 };
+    }
+
+    // ========== 场景与绘图 ==========
+    const plotEl = document.getElementById('plot');
+    function makeScene(){
+      const traces = [];
+      
+      // 1. 天球半球面（透明）
+      const phi = Array.from({length: 30}, (_, i) => i * Math.PI / 58); // 0 到 π/2
+      const theta = Array.from({length: 60}, (_, i) => i * 2 * Math.PI / 59); // 0 到 2π
+      const X = phi.map(p => theta.map(t => Math.sin(p) * Math.cos(t)));
+      const Y = phi.map(p => theta.map(t => Math.sin(p) * Math.sin(t)));
+      const Z = phi.map(p => theta.map(t => Math.cos(p)));
+      
+      traces.push({
+        type: 'surface',
+        x: X, y: Y, z: Z,
+        opacity: 0.15,
+        showscale: false,
+        colorscale: [[0, 'rgba(135,206,235,0.15)'], [1, 'rgba(135,206,235,0.15)']],
+        name: '天球'
+      });
+      
+      // 2. 地平圈（加粗）
+      const horizonTheta = Array.from({length: 200}, (_, i) => i * 2 * Math.PI / 199);
+      const horizonX = horizonTheta.map(t => 1.5 * Math.cos(t)); // 增大半径到1.5
+      const horizonY = horizonTheta.map(t => 1.5 * Math.sin(t));
+      const horizonZ = horizonTheta.map(() => 0);
+      
+      traces.push({
+        type: 'scatter3d',
+        mode: 'lines',
+        x: horizonX, y: horizonY, z: horizonZ,
+        line: { color: 'rgba(100,100,100,0.9)', width: 6 },
+        name: '地平圈'
+      });
+      
+      // 3. 地平面（扩大）
+      const r = [0, 1.5];
+      const u = Array.from({length: 80}, (_, i) => i * 2 * Math.PI / 79);
+      const groundX = r.map(R => u.map(U => R * Math.cos(U)));
+      const groundY = r.map(R => u.map(U => R * Math.sin(U)));
+      const groundZ = r.map(() => u.map(() => 0));
+      
+      traces.push({
+        type: 'surface',
+        x: groundX, y: groundY, z: groundZ,
+        opacity: 0.25,
+        showscale: false,
+        colorscale: [[0, 'rgba(160,160,160,0.25)'], [1, 'rgba(160,160,160,0.25)']],
+        name: '地平面'
+      });
+      
+      // 4. 方位标记
+      const directions = [
+        { name: '北', x: 0, y: 1.7, z: 0, color: 'blue' },
+        { name: '东', x: 1.7, y: 0, z: 0, color: 'red' },
+        { name: '南', x: 0, y: -1.7, z: 0, color: 'green' },
+        { name: '西', x: -1.7, y: 0, z: 0, color: 'orange' }
+      ];
+      
+      directions.forEach(dir => {
+        traces.push({
+          type: 'scatter3d',
+          mode: 'markers+text',
+          x: [dir.x], y: [dir.y], z: [dir.z],
+          marker: { size: 8, color: dir.color },
+          text: [dir.name],
+          textposition: 'middle center',
+          textfont: { size: 14, color: dir.color },
+          name: dir.name,
+          showlegend: false
+        });
+      });
+      
+      // 5. 立杆（长度1）
+      traces.push({
+        type: 'scatter3d',
+        mode: 'lines+markers',
+        x: [0, 0], y: [0, 0], z: [0, 1],
+        line: { color: 'black', width: 10 },
+        marker: { size: 6, color: 'black' },
+        name: '立杆'
+      });
+      
+      // 6. 天球网格线（经线）
+      for (let i = 0; i < 8; i++) {
+        const angle = i * Math.PI / 4;
+        const meridianPhi = Array.from({length: 30}, (_, j) => j * Math.PI / 58);
+        const meridianX = meridianPhi.map(p => Math.sin(p) * Math.cos(angle));
+        const meridianY = meridianPhi.map(p => Math.sin(p) * Math.sin(angle));
+        const meridianZ = meridianPhi.map(p => Math.cos(p));
+        
+        traces.push({
+          type: 'scatter3d',
+          mode: 'lines',
+          x: meridianX, y: meridianY, z: meridianZ,
+          line: { color: 'rgba(100,100,100,0.3)', width: 1 },
+          showlegend: false
+        });
+      }
+      
+      return traces;
+    }
+
+    function computeDayPath(lat, lon, dateLocal){
+      const xs=[], ys=[], zs=[]; // z=0
+      for(let h=0; h<=24; h++){
+        const d = new Date(dateLocal);
+        d.setHours(h, 0, 0, 0);
+        const pos = solarAzAltApprox(lat, lon, d);
+        const s = sunUnitVector(pos.azimuthDeg, pos.altitudeDeg);
+        const p = shadowPointOnGround(s, 1);
+        xs.push(p? p.x : NaN);
+        ys.push(p? p.y : NaN);
+        zs.push(0);
+      }
+      return { x:xs, y:ys, z:zs };
+    }
+
+    function render(){
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+      const alt = parseFloat(document.getElementById('alt').value); // 这里暂不影响几何，只作为标题展示
+      const dateStr = document.getElementById('date').value;
+      const hour = parseFloat(document.getElementById('hour').value);
+      const today = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+      const now = new Date(today);
+      const minutes = Math.round((hour - Math.floor(hour))*60);
+      now.setHours(Math.floor(hour), minutes, 0, 0);
+
+      const baseTraces = makeScene();
+      const path = computeDayPath(lat, lon, today);
+      const pathTrace = { type:'scatter3d', mode:'lines', x:path.x, y:path.y, z:path.z,
+        line:{ color:'orange', width:3 }, name:'全天杆影轨迹' };
+
+      const pos = solarAzAltApprox(lat, lon, now);
+      const s = sunUnitVector(pos.azimuthDeg, pos.altitudeDeg);
+      const p = shadowPointOnGround(s, 1);
+      const currentTrace = p ? { type:'scatter3d', mode:'markers+text', x:[p.x], y:[p.y], z:[0],
+        marker:{ color:'red', size:6 }, text:[`当前 ${Math.floor(hour)}:${String(minutes).padStart(2,'0')}`], textposition:'top center', name:'当前影' } :
+        { type:'scatter3d', mode:'text', x:[0], y:[0], z:[0], text:['夜间(无影)'], textfont:{ color:'gray', size:12 }, showlegend:false };
+
+      const layout = {
+        title: `地点: 纬度${lat.toFixed(2)}°, 经度${lon.toFixed(2)}°, 海拔${alt}m | 日期 ${today.toLocaleDateString()} `,
+        scene:{ 
+          xaxis:{range:[-2.5,2.5], showgrid:false, title:'东(+) ← → 西(-)', titlefont:{size:10}}, 
+          yaxis:{range:[-2.5,2.5], showgrid:false, title:'南(-) ← → 北(+)', titlefont:{size:10}}, 
+          zaxis:{range:[0,1.5], showgrid:false, title:'天顶', titlefont:{size:10}}, 
+          aspectmode:'cube', 
+          bgcolor:'rgb(10,10,30)',
+          camera: {
+            eye: { x: 1.5, y: 1.5, z: 1.2 },
+            center: { x: 0, y: 0, z: 0.3 }
+          }
+        },
+        paper_bgcolor:'rgb(0,0,0)', 
+        font:{ color:'#e5e7eb' },
+        margin: { l: 0, r: 0, t: 50, b: 0 }
+      };
+
+      Plotly.newPlot(plotEl, [...baseTraces, pathTrace, currentTrace], layout, {responsive:true});
+    }
+
+    // 初始化日期为今天
+    (function init(){
+      const dEl = document.getElementById('date');
+      const today = new Date();
+      dEl.value = today.toISOString().slice(0,10);
+      ['lat','lon','alt','date','hour'].forEach(id=> document.getElementById(id).addEventListener('input', render));
+      render();
+    })();
+  </script>
+</body>
+</html>

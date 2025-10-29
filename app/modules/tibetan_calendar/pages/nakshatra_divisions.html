@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>二十七宿分区</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display:grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    #plot { width: 100%; height: 560px; background:#0a0d12; border-radius:8px; }
+    @media (max-width: 900px) { .panel { grid-template-columns: 1fr; } #plot { height: 460px; } }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>二十七宿分区</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/tibetan_calendar/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <label>月亮黄经(°)：<input id="moonLon" type="range" min="0" max="360" value="13.3"/></label>
+          <span id="moonLonLabel">13.3°</span>
+        </div>
+        <div class="row" style="color:var(--muted); font-size:14px;">
+          将黄道 360° 划分为 27 等份，每份 13°20′ ≈ 13.333…°。
+        </div>
+        <div class="row" id="nakText" style="font-weight:600"></div>
+      </div>
+      <div class="canvas-wrap"><div id="plot"></div></div>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Tibetan Calendar Visualization</footer>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script>
+    BackButton.renderBackButton('#backContainer','/app/modules/tibetan_calendar/');
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    const tilt=23.44*Math.PI/180;
+    function ecliptic(){ const X=[],Y=[],Z=[]; for(let k=0;k<=360;k++){ const t=Math.PI*k/180; X.push(Math.cos(t)); Y.push(Math.sin(t)*Math.cos(tilt)); Z.push(Math.sin(t)*Math.sin(tilt)); } return {X,Y,Z}; }
+    function point(lon){ const t=lon*Math.PI/180; return { x:Math.cos(t), y:Math.sin(t)*Math.cos(tilt), z:Math.sin(t)*Math.sin(tilt) } }
+
+    const names = [
+      '角','亢','氐','房','心','尾','箕','斗','女','虚','危','室','壁',
+      '奎','娄','胃','昴','毕','觜','参','井','鬼','柳','星','张','翼','轸'
+    ];
+
+    function nakIndex(lon){ const span=360/27; let idx=Math.floor((lon%360)/span); if(idx<0) idx+=27; return idx; }
+
+    function render(mLon){
+      const {X,Y,Z}=ecliptic();
+      const traces=[ {type:'scatter3d',x:X,y:Y,z:Z,mode:'lines',line:{color:'#f59e0b',width:4},name:'黄道'} ];
+      // 27 分区弧段
+      const span=360/27; for(let i=0;i<27;i++){ const start=i*span, end=(i+1)*span; const SX=[],SY=[],SZ=[]; for(let d=start; d<=end; d+=1){ const p=point(d); SX.push(p.x);SY.push(p.y);SZ.push(p.z);} traces.push({type:'scatter3d',x:SX,y:SY,z:SZ,mode:'lines',line:{width:2,color:i%2? '#64748b':'#94a3b8'},name:`第${i+1}宿`}); }
+      const m=point(mLon); traces.push({type:'scatter3d',x:[m.x],y:[m.y],z:[m.z],mode:'markers',marker:{size:8,color:'#93c5fd'},name:`月亮 ${mLon.toFixed(1)}°`});
+
+      const idx=nakIndex(mLon); const name=names[idx]||`第${idx+1}宿`;
+      const layout={ title:`月亮黄经 ${mLon.toFixed(1)}° → 所处宿：${name} (第${idx+1}宿)`, scene:{ xaxis:{title:'东(+)西(-)'}, yaxis:{title:'北(+)南(-)'}, zaxis:{title:'天顶(+)地心(-)'}, aspectmode:'cube', bgcolor:'rgb(0,0,0)' }, template:'plotly_dark', font:{ color:'#1E3A8A'} };
+      Plotly.newPlot('plot', traces, layout);
+      document.getElementById('nakText').textContent = `当前宿：${name} (第${idx+1}宿)`;
+    }
+
+    const el=document.getElementById('moonLon'); const label=document.getElementById('moonLonLabel');
+    el.addEventListener('input',()=>{ label.textContent=`${parseFloat(el.value).toFixed(1)}°`; render(parseFloat(el.value)); });
+    render(parseFloat(el.value));
+  </script>
+</body>
+</html>

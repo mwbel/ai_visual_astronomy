@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>现代天文学可视化 · 术语目录</title>
+  <link rel="stylesheet" href="/assets/css/app.css" />
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>现代天文学可视化</h1>
+    <div class="header-actions">
+      <a class="btn" href="/app/astronomy_visualization/index.html">返回首页</a>
+      <button id="toggleTheme" class="btn">切换主题</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="toolbar">
+      <input id="searchInput" class="search" type="text" placeholder="搜索术语或页面…" />
+    </section>
+
+    <section id="cards" class="card-grid">
+      <a class="card" data-keywords="太阳 周日 视运动 行星" href="/app/astronomy_visualization/modern_astronomy/pages/daily_motion.html">
+        <div class="card-title">实时周日视运动轨迹</div>
+        <div class="card-desc">按地点/时间绘制太阳Az/Alt轨迹与日出日落</div>
+      </a>
+      <a class="card" data-keywords="太阳 年视运动 周年 天球" href="#">
+        <div class="card-title">太阳周年视运动轨迹</div>
+        <div class="card-desc">全年不同日期的视运动（待迁移）</div>
+      </a>
+      <a class="card" data-keywords="月亮 月相 实时" href="/app/astronomy_visualization/modern_astronomy/pages/moon_phase.html">
+        <div class="card-title">实时月相页面</div>
+        <div class="card-desc">显示照明比例、相位名称与明暗盘</div>
+      </a>
+      <a class="card" data-keywords="日晷 影长 太阳高度" href="#">
+        <div class="card-title">日晷 / 杆影长度变化</div>
+        <div class="card-desc">随时间变化的影长与方位（待实现）</div>
+      </a>
+      <a class="card" data-keywords="晨昏线 terminator 地球自转" href="#">
+        <div class="card-title">晨昏线动态演示</div>
+        <div class="card-desc">地球昼夜分界线与自转（待实现）</div>
+      </a>
+      <a class="card" data-keywords="天球 星空 方位 天顶" href="#">
+        <div class="card-title">天球球心与星空随时间变化</div>
+        <div class="card-desc">3D 地心天球（待迁移）</div>
+      </a>
+      <a class="card" data-keywords="纬度 星空 可视化 比较" href="#">
+        <div class="card-title">不同纬度的星空可视化</div>
+        <div class="card-desc">比较南北纬的星空（待实现）</div>
+      </a>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>© 2025 Modern Astronomy · 科技感主题</span>
+  </footer>
+
+  <script src="/assets/js/app.js"></script>
+</body>
+</html>

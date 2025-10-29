@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>实时月相</title>
+  <link rel="stylesheet" href="/assets/css/app.css" />
+  <style>
+    .panel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    canvas { width: 100%; height: 420px; background: #0a0d12; border-radius: 8px; }
+    .stat { font-size: 14px; color: var(--muted); }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>实时月相可视化</h1>
+    <div class="header-actions">
+      <a class="btn" href="/app/astronomy_visualization/modern_astronomy/index.html">返回模块</a>
+      <button id="toggleTheme" class="btn">切换主题</button>
+    </div>
+  </header>
+  
+  <main class="container">
+    <section class="panel">
+      <div class="controls">
+        <div class="row" style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+          <label>日期：<input id="date" type="date" /></label>
+        </div>
+        <div class="row" style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+          <label>时间：<input id="time" type="time" step="60" /></label>
+        </div>
+        <div class="row" style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+          <button id="nowBtn" class="btn">设为当前</button>
+          <button id="renderBtn" class="btn">更新显示</button>
+        </div>
+        <div class="stat">
+          <div>照明比例：<span id="illum"></span></div>
+          <div>相位名称：<span id="phaseName"></span></div>
+          <div>月龄（天）：<span id="age"></span></div>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="moon"></canvas>
+      </div>
+    </section>
+  </main>
+  
+  <footer class="app-footer">
+    <span>© 2025 Modern Astronomy · 月相可视化</span>
+  </footer>
+
+  <script src="/assets/js/app.js"></script>
+  <script src="/assets/js/astro_math.js"></script>
+  <script src="/assets/js/moon_phase.js"></script>
+</body>
+</html>

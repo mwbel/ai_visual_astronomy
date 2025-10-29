@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>不同纬度的星空</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>不同纬度的星空</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section id="content" style="margin-top:12px;">
+      <div class="visualization-container">
+        <div class="control-panel" style="font-size:16px;">
+          <div class="control-group">
+            <label for="latitudeSlider">纬度 (°):</label>
+            <input type="range" id="latitudeSlider" min="-90" max="90" step="5" value="40">
+            <span id="latitudeValue">40°N</span>
+          </div>
+          <div class="control-group">
+            <label for="timeSlider">时间 (小时):</label>
+            <input type="range" id="timeSlider" min="0" max="23" step="0.5" value="21">
+            <span id="timeValue">21:00</span>
+          </div>
+          <div class="control-group">
+            <label for="viewMode">显示模式:</label>
+            <select id="viewMode" style="font-size:16px;">
+              <option value="sky">天空视图</option>
+              <option value="comparison">纬度对比</option>
+              <option value="constellation">星座图</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <button id="playBtn" class="btn btn-primary">播放动画</button>
+            <button id="pauseBtn" class="btn btn-secondary">暂停</button>
+          </div>
+        </div>
+        
+        <div id="visualization" class="plot-container">
+          <div id="plotly-div" style="width: 100%; height: 600px; background:#0a0d12; border-radius:8px;"></div>
+        </div>
+        
+        <div class="info-panel" style="font-size:16px;">
+          <h3>不同纬度星空差异</h3>
+          <ul>
+            <li><strong>极地地区</strong>: 可以看到极星附近的恒星全年可见，称为拱极星</li>
+            <li><strong>赤道地区</strong>: 可以看到全天所有星座，但没有拱极星</li>
+            <li><strong>中纬度地区</strong>: 既有拱极星，也有季节性可见的星座</li>
+            <li><strong>地平坐标系</strong>: 以观测者为中心，用方位角和高度角描述天体位置</li>
+            <li><strong>赤道坐标系</strong>: 以地球为中心，用赤经和赤纬描述天体位置</li>
+            <li><strong>岁差现象</strong>: 地轴缓慢摆动导致星空位置长期变化</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div style="text-align: center; padding: 16px;">
+    <a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a>
+  </div>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script src="/assets/js/astro_math.js"></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    // 不同纬度星空可视化类
+    class LatitudeStarsVisualization {
+      constructor() {
+        this.latitude = 40;
+        this.currentTime = 21;
+        this.currentDate = new Date();
+        this.viewMode = 'sky';
+        this.animationId = null;
+        this.isPlaying = false;
+        this.longitude = 116.4; // 默认北京经度
+        this.tz = -new Date().getTimezoneOffset()/60; // 本地时区
+        
+        // 主要恒星数据 (简化版)
+        this.stars = this.generateStarData();
+        
+        this.initializeControls();
+        this.updateVisualization();
+      }
+
+      initializeControls() {
+        const latitudeSlider = document.getElementById('latitudeSlider');
+        const latitudeValue = document.getElementById('latitudeValue');
+        const timeSlider = document.getElementById('timeSlider');
+        const timeValue = document.getElementById('timeValue');
+        const viewMode = document.getElementById('viewMode');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+
+        latitudeSlider.addEventListener('input', (e) => {
+          this.latitude = parseFloat(e.target.value);
+          const hemisphere = this.latitude >= 0 ? 'N' : 'S';
+          latitudeValue.textContent = `${Math.abs(this.latitude)}°${hemisphere}`;
+          if (!this.isPlaying) {
+            this.updateVisualization();
+          }
+        });
+
+        timeSlider.addEventListener('input', (e) => {
+          this.currentTime = parseFloat(e.target.value);
+          timeValue.textContent = `${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`;
+          if (!this.isPlaying) {
+            this.updateVisualization();
+          }
+        });
+
+        viewMode.addEventListener('change', (e) => {
+          this.viewMode = e.target.value;
+          this.updateVisualization();
+        });
+
+        playBtn.addEventListener('click', () => this.startAnimation());
+        pauseBtn.addEventListener('click', () => this.stopAnimation());
+
+        // 监听位置和日期变化
+        const locContainer = document.getElementById('locationContainer');
+        locContainer.addEventListener('location-change', (e) => {
+          const { lon } = e.detail;
+          this.longitude = lon;
+          this.updateVisualization();
+        });
+        const dateContainer = document.getElementById('dateContainer');
+        dateContainer.addEventListener('date-change', (e) => {
+          const { year, month, day } = e.detail;
+          this.currentDate = new Date(year, month - 1, day);
+          this.updateVisualization();
+        });
+      }
+
+      // 生成恒星数据
+      generateStarData() {
+        return [
+          // 北极星
+          { name: '北极星', ra: 37.95, dec: 89.26, mag: 2.0, constellation: '小熊座' },
+          // 大熊座
+          { name: '天枢', ra: 165.93, dec: 61.75, mag: 1.8, constellation: '大熊座' },
+          { name: '天璇', ra: 165.46, dec: 56.38, mag: 2.4, constellation: '大熊座' },
+          { name: '天玑', ra: 154.27, dec: 55.96, mag: 2.4, constellation: '大熊座' },
+          { name: '天权', ra: 143.49, dec: 57.03, mag: 3.3, constellation: '大熊座' },
+          { name: '玉衡', ra: 194.01, dec: 53.69, mag: 1.9, constellation: '大熊座' },
+          { name: '开阳', ra: 200.98, dec: 54.93, mag: 2.2, constellation: '大熊座' },
+          { name: '摇光', ra: 206.89, dec: 49.31, mag: 1.9, constellation: '大熊座' },
+          // 仙后座
+          { name: '策', ra: 14.18, dec: 60.72, mag: 2.5, constellation: '仙后座' },
+          { name: '辇', ra: 21.45, dec: 60.24, mag: 2.3, constellation: '仙后座' },
+          { name: '中', ra: 28.60, dec: 63.67, mag: 2.2, constellation: '仙后座' },
+          { name: '左', ra: 56.54, dec: 56.54, mag: 2.7, constellation: '仙后座' },
+          { name: '右', ra: 117.18, dec: 59.15, mag: 3.4, constellation: '仙后座' },
+          // 猎户座
+          { name: '参宿四', ra: 88.79, dec: 7.41, mag: 0.4, constellation: '猎户座' },
+          { name: '参宿七', ra: 95.99, dec: -9.67, mag: 0.1, constellation: '猎户座' },
+          { name: '参宿一', ra: 85.19, dec: -1.20, mag: 1.6, constellation: '猎户座' },
+          { name: '参宿二', ra: 78.63, dec: -8.20, mag: 1.7, constellation: '猎户座' },
+          { name: '参宿三', ra: 83.00, dec: -0.30, mag: 1.6, constellation: '猎户座' },
+          // 天鹅座
+          { name: '天津四', ra: 310.36, dec: 45.28, mag: 1.3, constellation: '天鹅座' },
+          // 织女星
+          { name: '织女一', ra: 279.23, dec: 38.78, mag: 0.0, constellation: '天琴座' },
+          // 牛郎星
+          { name: '河鼓二', ra: 297.70, dec: 8.87, mag: 0.8, constellation: '天鹰座' },
+          // 南十字座 (南半球)
+          { name: '十字架二', ra: 187.79, dec: -59.69, mag: 0.8, constellation: '南十字座' },
+          { name: '十字架三', ra: 191.93, dec: -57.11, mag: 1.6, constellation: '南十字座' },
+          // 南极星附近
+          { name: '南极座σ', ra: 317.19, dec: -88.96, mag: 5.5, constellation: '南极座' }
+        ];
+      }
+
+      // 赤道坐标转地平坐标
+      equatorialToHorizontal(ra, dec, latitude, lst) {
+        const raRad = ra * Math.PI / 180;
+        const decRad = dec * Math.PI / 180;
+        const latRad = latitude * Math.PI / 180;
+        const lstRad = lst * Math.PI / 180;
+        
+        const hourAngle = lstRad - raRad;
+        
+        // 计算高度角
+        const altitude = Math.asin(
+          Math.sin(decRad) * Math.sin(latRad) + 
+          Math.cos(decRad) * Math.cos(latRad) * Math.cos(hourAngle)
+        );
+        
+        // 计算方位角
+        const azimuth = Math.atan2(
+          -Math.sin(hourAngle) * Math.cos(decRad),
+          Math.cos(latRad) * Math.sin(decRad) - Math.sin(latRad) * Math.cos(decRad) * Math.cos(hourAngle)
+        );
+        
+        return {
+          altitude: altitude * 180 / Math.PI,
+          azimuth: (azimuth * 180 / Math.PI + 360) % 360
+        };
+      }
+
+      // 计算恒星时
+      calculateLocalSiderealTime() {
+        const dayOfYear = Math.floor((this.currentDate - new Date(this.currentDate.getFullYear(), 0, 0)) / 86400000);
+        const gst = (280.46061837 + 360.98564736629 * dayOfYear + 0.000387933 * dayOfYear * dayOfYear) % 360;
+        return (gst + 15 * this.currentTime) % 360;
+      }
+
+      // 计算太阳地平坐标（使用 AstroMath）
+      computeSunAltAz() {
+        const date = new Date(this.currentDate);
+        const hours = Math.floor(this.currentTime);
+        const minutes = Math.floor((this.currentTime % 1) * 60);
+        date.setHours(hours, minutes, 0, 0);
+        const { azimuth, altitude } = AstroMath.solarPosition(date, this.latitude, this.longitude, this.tz);
+        return { azimuth, altitude };
+      }
+
+      // 创建天空视图
+      createSkyView() {
+        const lst = this.calculateLocalSiderealTime();
+        const visibleStars = this.stars
+          .map(star => {
+            const coords = this.equatorialToHorizontal(star.ra, star.dec, this.latitude, lst);
+            return { ...star, ...coords };
+          })
+          .filter(star => star.altitude > 0);
+
+        const traces = [
+          {
+            type: 'scatter',
+            mode: 'markers+text',
+            x: visibleStars.map(star => star.azimuth),
+            y: visibleStars.map(star => star.altitude),
+            text: visibleStars.map(star => star.name),
+            textposition: 'top center',
+            marker: { size: visibleStars.map(star => Math.max(4, 12 - star.mag * 2)), color: 'white' },
+            name: '恒星'
+          }
+        ];
+
+        // 叠加太阳位置（地平坐标）
+        const sun = this.computeSunAltAz();
+        if (sun.altitude > 0) {
+          traces.push({
+            type: 'scatter',
+            mode: 'markers+text',
+            x: [sun.azimuth],
+            y: [sun.altitude],
+            text: ['太阳'],
+            textposition: 'bottom center',
+            marker: { size: 14, color: '#ffd54f' },
+            name: '太阳'
+          });
+        }
+
+        const layout = {
+          title: `天空视图 - 纬度 ${this.latitude}° - ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          xaxis: {
+            title: '方位角 (°)',
+            range: [0, 360],
+            dtick: 45
+          },
+          yaxis: {
+            title: '高度角 (°)',
+            range: [0, 90]
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0.8)',
+          font: { color: 'white' }
+        };
+
+        return { data: traces, layout };
+      }
+
+      // 创建纬度对比视图
+      createLatitudeComparison() {
+        const latitudes = [90, 60, 30, 0, -30, -60, -90];
+        const lst = this.calculateLocalSiderealTime();
+        const traces = [];
+
+        latitudes.forEach((lat, index) => {
+          const visibleStars = [];
+          
+          this.stars.forEach(star => {
+            const coords = this.equatorialToHorizontal(star.ra, star.dec, lat, lst);
+            if (coords.altitude > 0) {
+              visibleStars.push({
+                ...star,
+                ...coords
+              });
+            }
+          });
+
+          if (visibleStars.length > 0) {
+            traces.push({
+              type: 'scatter',
+              mode: 'markers',
+              x: visibleStars.map(() => lat),
+              y: visibleStars.map(star => star.altitude),
+              text: visibleStars.map(star => star.name),
+              marker: {
+                size: visibleStars.map(star => Math.max(3, 8 - star.mag)),
+                color: `hsl(${index * 50}, 70%, 60%)`
+              },
+              name: `${lat}°`,
+              showlegend: true
+            });
+          }
+        });
+
+        const layout = {
+          title: `不同纬度可见恒星对比 - ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          xaxis: {
+            title: '纬度 (°)',
+            range: [-95, 95],
+            dtick: 30
+          },
+          yaxis: {
+            title: '高度角 (°)',
+            range: [0, 90]
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0.8)',
+          font: { color: 'white' }
+        };
+
+        return { data: traces, layout };
+      }
+
+      // 创建星座图
+      createConstellationView() {
+        const lst = this.calculateLocalSiderealTime();
+        const constellations = {};
+        
+        // 按星座分组
+        this.stars.forEach(star => {
+          const coords = this.equatorialToHorizontal(star.ra, star.dec, this.latitude, lst);
+          if (coords.altitude > 0) {
+            if (!constellations[star.constellation]) {
+              constellations[star.constellation] = [];
+            }
+            constellations[star.constellation].push({
+              ...star,
+              ...coords
+            });
+          }
+        });
+
+        const traces = [];
+        const colors = ['red', 'blue', 'green', 'orange', 'purple', 'yellow', 'cyan', 'pink', 'brown'];
+        let colorIndex = 0;
+
+        Object.entries(constellations).forEach(([constellation, stars]) => {
+          if (stars.length > 0) {
+            traces.push({
+              type: 'scatter',
+              mode: 'markers+text',
+              x: stars.map(star => star.azimuth),
+              y: stars.map(star => star.altitude),
+              text: stars.map(star => star.name),
+              textposition: 'top center',
+              marker: {
+                size: stars.map(star => Math.max(4, 12 - star.mag * 2)),
+                color: colors[colorIndex % colors.length]
+              },
+              name: constellation
+            });
+            colorIndex++;
+          }
+        });
+
+        const layout = {
+          title: `星座分布图 - 纬度 ${this.latitude}° - ${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`,
+          xaxis: {
+            title: '方位角 (°)',
+            range: [0, 360],
+            dtick: 45
+          },
+          yaxis: {
+            title: '高度角 (°)',
+            range: [0, 90]
+          },
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0.8)',
+          font: { color: 'white' }
+        };
+
+        return { data: traces, layout };
+      }
+
+      // 更新可视化
+      updateVisualization() {
+        let plotData;
+        
+        switch (this.viewMode) {
+          case 'sky':
+            plotData = this.createSkyView();
+            break;
+          case 'comparison':
+            plotData = this.createLatitudeComparison();
+            break;
+          case 'constellation':
+            plotData = this.createConstellationView();
+            break;
+          default:
+            plotData = this.createSkyView();
+        }
+
+        Plotly.newPlot('plotly-div', plotData.data, plotData.layout, {
+          responsive: true,
+          displayModeBar: true
+        });
+      }
+
+      // 开始动画
+      startAnimation() {
+        if (this.isPlaying) return;
+        
+        this.isPlaying = true;
+        const animate = () => {
+          if (!this.isPlaying) return;
+          
+          this.currentTime += 0.2;
+          if (this.currentTime >= 24) {
+            this.currentTime = 0;
+          }
+          
+          // 更新滑块和显示
+          document.getElementById('timeSlider').value = this.currentTime;
+          document.getElementById('timeValue').textContent = 
+            `${Math.floor(this.currentTime)}:${String(Math.floor((this.currentTime % 1) * 60)).padStart(2, '0')}`;
+          
+          this.updateVisualization();
+          
+          this.animationId = setTimeout(animate, 200);
+        };
+        
+        animate();
+      }
+
+      // 停止动画
+      stopAnimation() {
+        this.isPlaying = false;
+        if (this.animationId) {
+          clearTimeout(this.animationId);
+          this.animationId = null;
+        }
+      }
+    }
+
+    // 初始化可视化
+    document.addEventListener('DOMContentLoaded', () => {
+      new LatitudeStarsVisualization();
+    });
+  </script>
+</body>
+</html>

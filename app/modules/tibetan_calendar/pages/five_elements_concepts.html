@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>五要素概念可视化（示意）</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display:grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:12px; align-items:center; margin-bottom:10px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    #plot { width: 100%; height: 600px; background:#0a0d12; border-radius:8px; }
+    .note { color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) { .panel { grid-template-columns: 1fr; } #plot { height: 480px; } }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>五要素概念可视化（示意）</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/tibetan_calendar/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <label>年份：
+            <select id="year"></select>
+          </label>
+          <label>月份：
+            <select id="month"></select>
+          </label>
+        </div>
+        <div class="row">
+          <label>日期滑块：<input id="dayRange" type="range" min="1" max="31" value="15" /></label>
+          <span id="dayLabel">15日</span>
+        </div>
+        <div class="row note">说明：此页面以黄道环为载体，示意性地将黄道分为五等分，分别对应五要素（木、火、土、金、水）。太阳与月亮的黄经为简化近似，仅用于概念展示，后续将根据文档细化历算与映射规则。</div>
+        <div class="row" id="resultText" style="font-weight:600"></div>
+      </div>
+      <div class="canvas-wrap"><div id="plot"></div></div>
+    </section>
+  </main>
+  <footer class="app-footer">© 2025 Tibetan Calendar Visualization</footer>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script>
+    BackButton.renderBackButton('#backContainer','/app/modules/tibetan_calendar/');
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+
+    // 五要素设定（示意：将黄道 360° 分成 5 等份）
+    const ELEMENTS = [
+      { name:'木', color:'#10b981', start:0, end:72 },
+      { name:'火', color:'#ef4444', start:72, end:144 },
+      { name:'土', color:'#f59e0b', start:144, end:216 },
+      { name:'金', color:'#94a3b8', start:216, end:288 },
+      { name:'水', color:'#3b82f6', start:288, end:360 },
+    ];
+    const tilt=23.44*Math.PI/180;
+    const toRad = d=>d*Math.PI/180;
+    const mod360 = d=>((d%360)+360)%360;
+
+    function pointOnEcliptic(lon){ const t=toRad(lon); return { x:Math.cos(t), y:Math.sin(t)*Math.cos(tilt), z:Math.sin(t)*Math.sin(tilt) } }
+    function eclipticRing(){ const X=[],Y=[],Z=[]; for(let k=0;k<=360;k++){ const p=pointOnEcliptic(k); X.push(p.x);Y.push(p.y);Z.push(p.z);} return {X,Y,Z}; }
+    function elementOfLongitude(lon){ lon=mod360(lon); return ELEMENTS.find(e=> lon>=e.start && lon<e.end) || ELEMENTS[ELEMENTS.length-1]; }
+
+    // 近似天文：简化太阳/月亮黄经（以 J2000 为参考，概念演示）
+    const EPOCH = Date.UTC(2000,0,1,12,0,0); // J2000近似
+    function solarLongitudeApprox(d){ const days=(d.getTime()-EPOCH)/86400000; const rate=360/365.2422; return mod360(280 + days*rate); }
+    function lunarLongitudeApprox(d){ const days=(d.getTime()-EPOCH)/86400000; const rate=360/27.321661; return mod360(218 + days*rate); }
+
+    function daysInMonth(year,month){ return new Date(year, month, 0).getDate(); }
+    function buildSelectors(){
+      const ySel=document.getElementById('year'); const mSel=document.getElementById('month'); const dRange=document.getElementById('dayRange');
+      for(let y=2020;y<=2035;y++){ const o=document.createElement('option'); o.value=y; o.textContent=y; if(y===2025) o.selected=true; ySel.appendChild(o); }
+      for(let m=1;m<=12;m++){ const o=document.createElement('option'); o.value=m; o.textContent=m; if(m===10) o.selected=true; mSel.appendChild(o); }
+      const updateDayMax=()=>{ const year=parseInt(ySel.value), month=parseInt(mSel.value); dRange.max=daysInMonth(year,month); if(parseInt(dRange.value)>parseInt(dRange.max)) dRange.value=dRange.max; document.getElementById('dayLabel').textContent=`${dRange.value}日`; };
+      ySel.addEventListener('change', updateDayMax); mSel.addEventListener('change', updateDayMax); dRange.addEventListener('input',()=>{ document.getElementById('dayLabel').textContent=`${dRange.value}日`; render(); });
+      updateDayMax();
+    }
+
+    function currentDate(){ const y=parseInt(document.getElementById('year').value); const m=parseInt(document.getElementById('month').value); const d=parseInt(document.getElementById('dayRange').value); return new Date(Date.UTC(y,m-1,d,12,0,0)); }
+
+    function render(){
+      const date=currentDate();
+      const sLon=solarLongitudeApprox(date); const mLon=lunarLongitudeApprox(date);
+      const sEl=elementOfLongitude(sLon); const mEl=elementOfLongitude(mLon);
+
+      const {X,Y,Z}=eclipticRing();
+      const traces=[ {type:'scatter3d',x:X,y:Y,z:Z,mode:'lines',line:{color:'#f59e0b',width:4},name:'黄道'} ];
+      // 五等分色带（抽样为线段）
+      for(const e of ELEMENTS){ const SX=[],SY=[],SZ=[]; for(let d=e.start; d<=e.end; d+=1){ const p=pointOnEcliptic(d); SX.push(p.x);SY.push(p.y);SZ.push(p.z);} traces.push({type:'scatter3d',x:SX,y:SY,z:SZ,mode:'lines',line:{width:6,color:e.color},name:`${e.name} (${e.start}°–${e.end}°)`}); }
+      const s=pointOnEcliptic(sLon); const m=pointOnEcliptic(mLon);
+      traces.push({type:'scatter3d',x:[s.x],y:[s.y],z:[s.z],mode:'markers+text',marker:{size:8,color:'#fde68a'},text:[`太阳 ${sLon.toFixed(1)}° → ${sEl.name}`],textposition:'top center',name:'太阳'});
+      traces.push({type:'scatter3d',x:[m.x],y:[m.y],z:[m.z],mode:'markers+text',marker:{size:8,color:'#93c5fd'},text:[`月亮 ${mLon.toFixed(1)}° → ${mEl.name}`],textposition:'top center',name:'月亮'});
+
+      const layout={ title:`日期：${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')} (UTC中午)`, scene:{ xaxis:{title:'东(+)西(-)'}, yaxis:{title:'北(+)南(-)'}, zaxis:{title:'天顶(+)地心(-)'}, aspectmode:'cube', bgcolor:'rgb(0,0,0)' }, template:'plotly_dark', font:{ color:'#1E3A8A'} };
+      Plotly.newPlot('plot', traces, layout);
+      document.getElementById('resultText').textContent = `太阳：${sLon.toFixed(1)}° → ${sEl.name}；月亮：${mLon.toFixed(1)}° → ${mEl.name}`;
+    }
+
+    buildSelectors();
+    render();
+  </script>
+</body>
+</html>

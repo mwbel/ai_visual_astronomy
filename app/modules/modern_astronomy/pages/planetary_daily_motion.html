@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>行星周年视运动轨迹</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .controls label, .controls input, .controls button, .controls select { font-size: 14px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    canvas { width: 100%; height: 520px; background: #0a0d12; border-radius: 8px; }
+    .legend { color: var(--muted); font-size: 14px; margin-top: 8px; display:flex; gap:12px; }
+    .legend .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+    /* 新增 3D 天球 iframe 样式与布局 */
+    .panel3d { margin-top: 16px; }
+    .panel3d .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    iframe#celestial3d { width: 100%; height: 560px; background: #0a0d12; border-radius: 8px; }
+    @media (max-width: 900px) {
+      .panel { grid-template-columns: 1fr; }
+      canvas { height: 420px; }
+      iframe#celestial3d { height: 480px; }
+    }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>行星周年视运动轨迹</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <!-- 移除重复的纬度/经度输入，统一使用顶栏地点选择器 -->
+          <!-- <label>纬度 (°)：<input id="lat" type="number" step="0.0001" value="39.9042" /></label>
+          <label>经度 (°)：<input id="lon" type="number" step="0.0001" value="116.4074" /></label> -->
+        </div>
+        <div class="row">
+          <!-- 移除重复的日期输入，统一使用顶栏日期选择器 -->
+          <!-- <label>日期：<input id="date" type="date" /></label> -->
+        </div>
+        <div class="row">
+          <label>时间：<input id="time" type="time" step="60" /></label>
+        </div>
+        <div class="row">
+          <label>小时滑块：<input id="hourRange" type="range" min="0" max="23" value="12" /></label>
+          <button id="minusHour" class="btn">-1小时</button>
+          <button id="plusHour" class="btn">+1小时</button>
+          <button id="minus10m" class="btn">-10分钟</button>
+          <button id="plus10m" class="btn">+10分钟</button>
+          <button id="refresh3dBtn" class="btn" title="重新加载3D图">刷新3D图</button>
+        </div>
+        <div class="row">
+          <button id="nowBtn" class="btn">设为当前时间</button>
+          <button id="renderBtn" class="btn">更新轨迹</button>
+        </div>
+        <div class="row" style="color:var(--muted); font-size:14px;">
+          方位角 Azimuth 0–360°，高度角 Altitude -10–90°。滑块联动下方 3D 天球。
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="plot"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:#4db8ff"></span> 今日全天太阳轨迹</span>
+          <span><span class="dot" style="background:#7bd389"></span> 当前时刻位置</span>
+          <span><span class="dot" style="background:#ffcc66"></span> 日出/日落点</span>
+        </div>
+      </div>
+    </section>
+  <section class="panel3d">
+    <div class="canvas-wrap">
+      <div id="celestial3dContainer" style="width:100%; height:560px; background:#0a0d12; border-radius:8px; overflow:hidden;"></div>
+      <div class="legend" style="justify-content: space-between; align-items:center;">
+        <div style="color:var(--muted)">
+          3D 天球视角（太阳、月亮、七大行星周日视运动）
+          <span id="overlay3d" style="margin-left:12px;">时间：--:--</span>
+        </div>
+        <a class="btn" target="_blank" href="/app/modules/modern_astronomy/pages/celestial_sphere_model_plotly.html">新窗口打开</a>
+      </div>
+    </div>
+  </section>
+  </main>
+  <div style="text-align: center; padding: 16px;">
+    <a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a>
+  </div>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script src="/assets/js/astro_math.js"></script>
+  <script src="/assets/js/daily_motion.js?v=2"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    // 时间滑块与增减按钮联动 2D 轨迹 + 同步 3D iframe
+    const timeInput = document.getElementById('time');
+    const hourRange = document.getElementById('hourRange');
+    const minusHour = document.getElementById('minusHour');
+    const plusHour = document.getElementById('plusHour');
+    const minus10m = document.getElementById('minus10m');
+    const plus10m = document.getElementById('plus10m');
+    const refresh3dBtn = document.getElementById('refresh3dBtn');
+    const celestial3dContainer = document.getElementById('celestial3dContainer');
+
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    function parseTime(){
+      const [h,m] = (timeInput.value || '12:00').split(':').map(v=>parseInt(v||'0',10));
+      return {h: isNaN(h)?12:h, m: isNaN(m)?0:m};
+    }
+    function setTime(h,m){
+      const hh = ((h%24)+24)%24; // wrap 0-23
+      const mm = ((m%60)+60)%60; // wrap 0-59
+      timeInput.value = pad2(hh)+":"+pad2(mm);
+      hourRange.value = hh;
+      timeInput.dispatchEvent(new Event('change'));
+    }
+    function applyHourFromSlider(){ const {m} = parseTime(); setTime(parseInt(hourRange.value,10), m); }
+
+    function sync3d(){
+      const tzNum = -new Date().getTimezoneOffset()/60;
+      const tz = String(tzNum);
+      const {h,m} = parseTime();
+      const date = document.querySelector('#dateContainer input[type="date"]')?.value || '';
+      const lat = document.querySelector('#locationContainer input[name="latitude"]')?.value || '31.23';
+      const lon = document.querySelector('#locationContainer input[name="longitude"]')?.value || '121.47';
+      const qs = new URLSearchParams({ lat, lon, tz, date, time: `${pad2(h)}:${pad2(m)}` , cb: String(Date.now())});
+      const iframeUrl = `/app/modules/modern_astronomy/pages/celestial_sphere_model_plotly.html?${qs.toString()}`;
+      celestial3dContainer.innerHTML = `<iframe id="celestial3d" src="${iframeUrl}" frameborder="0" scrolling="no" style="width:100%;height:100%;"></iframe>`;
+      const overlay = document.getElementById('overlay3d');
+      if (overlay) {
+        const tzNum = parseFloat(tz);
+        const tzStr = isNaN(tzNum) ? `UTC` : (tzNum >= 0 ? `UTC+${tzNum}` : `UTC${tzNum}`);
+        overlay.textContent = `时间：${date || '--'} ${pad2(h)}:${pad2(m)} ${tzStr}，地点：${lat}°, ${lon}°`;
+      }
+    }
+
+    hourRange.addEventListener('input', ()=>{ applyHourFromSlider(); sync3d(); });
+    minusHour.addEventListener('click', ()=>{ const {h,m}=parseTime(); setTime(h-1,m); sync3d(); });
+    plusHour.addEventListener('click', ()=>{ const {h,m}=parseTime(); setTime(h+1,m); sync3d(); });
+    minus10m.addEventListener('click', ()=>{ const {h,m}=parseTime(); setTime(h, m-10); sync3d(); });
+    plus10m.addEventListener('click', ()=>{ const {h,m}=parseTime(); setTime(h, m+10); sync3d(); });
+
+    // 手动刷新 3D 图（重新加载 iframe）
+    refresh3dBtn.addEventListener('click', sync3d);
+    // 页面初始化时加载一次 3D 天球
+    sync3d();
+  </script>
+</body>
+</html>

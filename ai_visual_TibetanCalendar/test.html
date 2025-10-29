@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>藏历天文历算可视化工具 - 测试版</title>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0c1445 0%, #1a1a2e 50%, #16213e 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .title {
+            font-size: 2rem;
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #4facfe;
+            background: rgba(79, 172, 254, 0.1);
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .control-group {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .control-group h3 {
+            margin-top: 0;
+            color: #4facfe;
+            border-bottom: 1px solid rgba(79, 172, 254, 0.3);
+            padding-bottom: 10px;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .data-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        
+        .value {
+            color: #4facfe;
+            font-weight: bold;
+        }
+        
+        .term-explanation {
+            background: rgba(118, 75, 162, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #764ba2;
+            margin: 20px 0;
+        }
+        
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            margin: 5px 0;
+        }
+        
+        select option {
+            background: #1a1a2e;
+            color: white;
+        }
+        
+        .visualization-placeholder {
+            height: 400px;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0c1445 100%);
+            border: 2px dashed rgba(79, 172, 254, 0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #4facfe;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">藏历天文历算可视化工具</h1>
+            <p>测试版 - 验证基础功能</p>
+        </div>
+        
+        <div class="status" id="status">
+            <strong>状态：</strong><span id="statusText">正在初始化...</span>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h3>日期控制</h3>
+                <label>选择日期:</label>
+                <input type="date" id="dateInput" value="2024-01-01">
+                <label>时间:</label>
+                <input type="time" id="timeInput" value="12:00">
+                <button class="btn" onclick="updateCalculations()">更新计算</button>
+            </div>
+            
+            <div class="control-group">
+                <h3>术语选择</h3>
+                <select id="termSelect" onchange="showTermExplanation()">
+                    <option value="">选择术语...</option>
+                    <option value="sidereal_day">恒星日</option>
+                    <option value="solar_day">太阳日</option>
+                    <option value="lunar_month">朔望月</option>
+                    <option value="constellation_28">二十八宿</option>
+                    <option value="constellation_27">二十七宿</option>
+                    <option value="solar_terms">节气</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <h3>视角控制</h3>
+                <button class="btn" onclick="setViewMode('geocentric')">地心视角</button>
+                <button class="btn" onclick="setViewMode('heliocentric')">日心视角</button>
+                <button class="btn" onclick="setViewMode('lunarcentric')">月心视角</button>
+            </div>
+        </div>
+        
+        <div class="visualization-placeholder">
+            3D可视化区域 (Three.js场景将在这里显示)
+        </div>
+        
+        <div class="data-display">
+            <h3>实时天文数据</h3>
+            <div class="data-item">
+                <span>当前日期:</span>
+                <span class="value" id="currentDate">2024-01-01</span>
+            </div>
+            <div class="data-item">
+                <span>恒星时:</span>
+                <span class="value" id="siderealTime">--:--:--</span>
+            </div>
+            <div class="data-item">
+                <span>太阳赤经:</span>
+                <span class="value" id="sunRA">--°</span>
+            </div>
+            <div class="data-item">
+                <span>太阳赤纬:</span>
+                <span class="value" id="sunDec">--°</span>
+            </div>
+            <div class="data-item">
+                <span>月亮赤经:</span>
+                <span class="value" id="moonRA">--°</span>
+            </div>
+            <div class="data-item">
+                <span>月亮赤纬:</span>
+                <span class="value" id="moonDec">--°</span>
+            </div>
+            <div class="data-item">
+                <span>时间差累积:</span>
+                <span class="value" id="timeDifference">0 分钟</span>
+            </div>
+        </div>
+        
+        <div class="term-explanation" id="termExplanation" style="display: none;">
+            <h3 id="termTitle">术语解释</h3>
+            <p id="termDescription">选择上方术语查看详细解释...</p>
+        </div>
+    </div>
+
+    <script>
+        // 简化的天文计算器
+        class SimpleAstronomyCalculator {
+            constructor() {
+                this.SIDEREAL_DAY_HOURS = 23.93447;
+                this.SOLAR_DAY_HOURS = 24.0;
+                
+                this.termExplanations = {
+                    'sidereal_day': {
+                        title: '恒星日',
+                        description: '地球相对于恒星自转一周的时间，约23小时56分4秒。比太阳日短约4分钟。恒星日是天文学中的基本时间单位，反映了地球的真实自转周期。'
+                    },
+                    'solar_day': {
+                        title: '太阳日',
+                        description: '太阳连续两次经过同一地点天顶的时间间隔，平均为24小时。太阳日比恒星日长，是因为地球在公转的同时也在自转。'
+                    },
+                    'lunar_month': {
+                        title: '朔望月',
+                        description: '月亮从新月到下一个新月的周期，约29.53天。朔望月是农历月份的基础，包含新月、上弦、满月、下弦四个主要月相。'
+                    },
+                    'constellation_28': {
+                        title: '二十八宿',
+                        description: '中国古代天文学将黄道附近的星空分为二十八个星座。二十八宿是中国传统天文学的重要组成部分，用于观测和记录天体运动。'
+                    },
+                    'constellation_27': {
+                        title: '二十七宿',
+                        description: '印度天文学系统，将黄道分为27个星座，每个约13.33度。二十七宿系统在藏历天文学中有重要应用，与二十八宿系统略有不同。'
+                    },
+                    'solar_terms': {
+                        title: '节气',
+                        description: '根据太阳在黄道上的位置划分的24个时间节点。节气反映了太阳直射点的移动规律，是农业生产的重要时间参考。'
+                    }
+                };
+            }
+            
+            calculateSiderealTime(date) {
+                const J2000 = new Date('2000-01-01T12:00:00Z');
+                const daysSinceJ2000 = (date - J2000) / (1000 * 60 * 60 * 24);
+                const gst = (18.697374558 + 24.06570982441908 * daysSinceJ2000) % 24;
+                return gst;
+            }
+            
+            calculateSunPosition(date) {
+                const dayOfYear = this.getDayOfYear(date);
+                const n = dayOfYear - 81;
+                const L = (280.460 + 0.9856474 * n) % 360;
+                const g = ((357.528 + 0.9856003 * n) % 360) * Math.PI / 180;
+                
+                const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * Math.PI / 180;
+                const epsilon = 23.439 * Math.PI / 180;
+                
+                const ra = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda)) * 180 / Math.PI;
+                const dec = Math.asin(Math.sin(epsilon) * Math.sin(lambda)) * 180 / Math.PI;
+                
+                return {
+                    rightAscension: ra < 0 ? ra + 360 : ra,
+                    declination: dec
+                };
+            }
+            
+            calculateMoonPosition(date) {
+                const daysSinceNewMoon = this.getDaysSinceNewMoon(date);
+                const meanLongitude = (218.316 + 13.176396 * daysSinceNewMoon) % 360;
+                const meanAnomaly = (134.963 + 13.064993 * daysSinceNewMoon) % 360 * Math.PI / 180;
+                
+                const longitude = (meanLongitude + 6.289 * Math.sin(meanAnomaly)) * Math.PI / 180;
+                const latitude = 5.128 * Math.sin((93.272 + 13.229350 * daysSinceNewMoon) * Math.PI / 180) * Math.PI / 180;
+                
+                const epsilon = 23.439 * Math.PI / 180;
+                const ra = Math.atan2(
+                    Math.cos(epsilon) * Math.sin(longitude) - Math.sin(epsilon) * Math.tan(latitude),
+                    Math.cos(longitude)
+                ) * 180 / Math.PI;
+                const dec = Math.asin(
+                    Math.sin(epsilon) * Math.sin(longitude) + Math.cos(epsilon) * Math.sin(latitude)
+                ) * 180 / Math.PI;
+                
+                return {
+                    rightAscension: ra < 0 ? ra + 360 : ra,
+                    declination: dec
+                };
+            }
+            
+            getDayOfYear(date) {
+                const start = new Date(date.getFullYear(), 0, 0);
+                const diff = date - start;
+                return Math.floor(diff / (1000 * 60 * 60 * 24));
+            }
+            
+            getDaysSinceNewMoon(date) {
+                const referenceNewMoon = new Date('2000-01-06T18:14:00Z');
+                const daysDiff = (date - referenceNewMoon) / (1000 * 60 * 60 * 24);
+                return daysDiff;
+            }
+        }
+        
+        // 全局变量
+        let calculator = new SimpleAstronomyCalculator();
+        let currentDate = new Date('2024-01-01T12:00:00');
+        
+        // 初始化
+        function init() {
+            try {
+                document.getElementById('statusText').textContent = '初始化成功！';
+                document.getElementById('status').style.borderLeftColor = '#51cf66';
+                document.getElementById('status').style.background = 'rgba(81, 207, 102, 0.1)';
+                updateCalculations();
+            } catch (error) {
+                document.getElementById('statusText').textContent = '初始化失败: ' + error.message;
+                document.getElementById('status').style.borderLeftColor = '#ff6b6b';
+                document.getElementById('status').style.background = 'rgba(255, 107, 107, 0.1)';
+            }
+        }
+        
+        // 更新计算
+        function updateCalculations() {
+            try {
+                const dateInput = document.getElementById('dateInput').value;
+                const timeInput = document.getElementById('timeInput').value;
+                
+                currentDate = new Date(dateInput + 'T' + timeInput + ':00');
+                
+                // 计算天文数据
+                const siderealTime = calculator.calculateSiderealTime(currentDate);
+                const sunPosition = calculator.calculateSunPosition(currentDate);
+                const moonPosition = calculator.calculateMoonPosition(currentDate);
+                
+                // 计算时间差
+                const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
+                const daysDiff = Math.floor((currentDate - startOfYear) / (1000 * 60 * 60 * 24));
+                const timeDiff = daysDiff * (calculator.SOLAR_DAY_HOURS - calculator.SIDEREAL_DAY_HOURS) * 60;
+                
+                // 更新显示
+                document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('zh-CN');
+                
+                const hours = Math.floor(siderealTime);
+                const minutes = Math.floor((siderealTime - hours) * 60);
+                const seconds = Math.floor(((siderealTime - hours) * 60 - minutes) * 60);
+                document.getElementById('siderealTime').textContent = 
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                document.getElementById('sunRA').textContent = sunPosition.rightAscension.toFixed(1) + '°';
+                document.getElementById('sunDec').textContent = sunPosition.declination.toFixed(1) + '°';
+                document.getElementById('moonRA').textContent = moonPosition.rightAscension.toFixed(1) + '°';
+                document.getElementById('moonDec').textContent = moonPosition.declination.toFixed(1) + '°';
+                document.getElementById('timeDifference').textContent = timeDiff.toFixed(1) + ' 分钟';
+                
+            } catch (error) {
+                console.error('计算错误:', error);
+            }
+        }
+        
+        // 显示术语解释
+        function showTermExplanation() {
+            const termKey = document.getElementById('termSelect').value;
+            const explanationDiv = document.getElementById('termExplanation');
+            
+            if (!termKey) {
+                explanationDiv.style.display = 'none';
+                return;
+            }
+            
+            const explanation = calculator.termExplanations[termKey];
+            if (explanation) {
+                document.getElementById('termTitle').textContent = explanation.title;
+                document.getElementById('termDescription').textContent = explanation.description;
+                explanationDiv.style.display = 'block';
+            }
+        }
+        
+        // 设置视角模式
+        function setViewMode(mode) {
+            console.log('切换视角模式:', mode);
+            // 这里可以添加3D场景的视角切换逻辑
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

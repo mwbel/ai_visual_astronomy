@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>实时月相</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .panel { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+    .controls { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--card-bg-dark); }
+    .controls .row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+    .controls label, .controls input, .controls button, .controls select { font-size: 16px; }
+    .stat { font-size: 16px; color: var(--muted); margin-bottom: 8px; }
+    .canvas-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); }
+    canvas { width:100%; height:420px; background:#0E131A; border-radius:8px; }
+    .iframe-wrap{ border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card-bg-dark); margin-top:16px; }
+    .iframe-wrap iframe{ width:100%; height:640px; border:0; background:#0a0d12; }
+    .hint{ color:var(--muted); font-size:12px; margin:8px 0; }
+    @media (max-width: 900px) {
+      .panel { grid-template-columns: 1fr; }
+      canvas { height: 360px; }
+    }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>实时月相</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section class="panel">
+      <div class="controls">
+        <div class="row">
+          <label>纬度 (°)：<input id="lat" type="number" step="0.0001" value="39.9042" /></label>
+          <label>经度 (°)：<input id="lon" type="number" step="0.0001" value="116.4074" /></label>
+        </div>
+        <div class="row">
+          <label>年份：<input id="year" type="number" min="2020" max="2030" value="2025" /></label>
+          <label>月份：<input id="month" type="number" min="1" max="12" value="10" /></label>
+        </div>
+        <div class="row">
+          <label>日期滑块：<input id="dayRange" type="range" min="1" max="31" value="23" /></label>
+          <span id="dateDisplay">23日</span>
+        </div>
+        <div class="row">
+          <button id="minusDay" class="btn">-1天</button>
+          <button id="plusDay" class="btn">+1天</button>
+          <button id="nowBtn" class="btn">当前日期</button>
+        </div>
+        <div class="stat">照明比例：<span id="illum"></span></div>
+        <div class="stat">相位名称：<span id="phaseName"></span></div>
+        <div class="stat">月龄（天）：<span id="age"></span></div>
+        <div class="row" style="color:var(--muted); font-size:14px;">
+          滑块控制日期，实时显示月相变化。
+        </div>
+      </div>
+      <div class="canvas-wrap"><canvas id="moon"></canvas></div>
+    </section>
+    <section>
+      <details open>
+        <summary class="btn">切换查看：Python 滑块版（日地月相位）</summary>
+        <p class="hint">该视图由 Python 生成的 Plotly 页面提供，支持年份下拉与滑块交互。</p>
+        <div class="iframe-wrap">
+          <iframe src="/app/modules/modern_astronomy/pages/sun_earth_moon_phase_slider_plotly.html" title="Python月相滑块"></iframe>
+        </div>
+      </details>
+    </section>
+  </main>
+  <div style="text-align: center; padding: 16px;">
+    <a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a>
+  </div>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script src="/assets/js/astro_math.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+  </script>
+  <script>
+  (function(){
+    const canvas = document.getElementById('moon');
+    const ctx = canvas.getContext('2d');
+    const illumEl = document.getElementById('illum');
+    const phaseNameEl = document.getElementById('phaseName');
+    const ageEl = document.getElementById('age');
+    
+    // 控制元素
+    const latEl = document.getElementById('lat');
+    const lonEl = document.getElementById('lon');
+    const yearEl = document.getElementById('year');
+    const monthEl = document.getElementById('month');
+    const dayRangeEl = document.getElementById('dayRange');
+    const dateDisplayEl = document.getElementById('dateDisplay');
+    const minusDayBtn = document.getElementById('minusDay');
+    const plusDayBtn = document.getElementById('plusDay');
+    const nowBtn = document.getElementById('nowBtn');
+    
+    function resize(){ 
+      const r = canvas.getBoundingClientRect(); 
+      canvas.width = Math.floor(r.width); 
+      canvas.height = Math.floor(r.height); 
+    }
+    
+    function drawMoon(fraction, waxing){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const grad = ctx.createLinearGradient(0,0,0,canvas.height); 
+      grad.addColorStop(0,'#0c1220'); 
+      grad.addColorStop(1,'#0a0d12'); 
+      ctx.fillStyle=grad; 
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      
+      const cx=canvas.width/2, cy=canvas.height/2, r=Math.min(canvas.width,canvas.height)*0.35;
+      ctx.fillStyle='#11161f'; 
+      ctx.beginPath(); 
+      ctx.arc(cx,cy,r,0,2*Math.PI); 
+      ctx.fill();
+      
+      const phaseAngle = Math.acos(2*fraction - 1), dir = waxing ? 1 : -1, k = Math.cos(phaseAngle);
+      ctx.save(); 
+      ctx.beginPath(); 
+      ctx.arc(cx,cy,r,0,2*Math.PI); 
+      ctx.clip();
+      
+      const glow = ctx.createRadialGradient(cx,cy,r*0.2,cx,cy,r); 
+      glow.addColorStop(0,'#e8edf7'); 
+      glow.addColorStop(1,'#9fb3d4'); 
+      ctx.fillStyle=glow;
+      
+      const steps=360; 
+      for(let i=0;i<steps;i++){ 
+        const t=(i/(steps-1))*2-1; 
+        const x=t*r; 
+        const w=r*Math.sqrt(1-(x*x)/(r*r)); 
+        const cutoff=k*r; 
+        let left=cx - dir*cutoff; 
+        let right=cx + dir*r; 
+        ctx.fillRect(Math.min(left,right), cy-w, Math.abs(right-left), 2*w); 
+      }
+      ctx.restore(); 
+      ctx.strokeStyle='#2b3b55'; 
+      ctx.lineWidth=2; 
+      ctx.beginPath(); 
+      ctx.arc(cx,cy,r,0,2*Math.PI); 
+      ctx.stroke();
+    }
+    
+    function getCurrentDate() {
+      const year = parseInt(yearEl.value);
+      const month = parseInt(monthEl.value);
+      const day = parseInt(dayRangeEl.value);
+      return new Date(year, month - 1, day);
+    }
+    
+    function updateDayRange() {
+      const year = parseInt(yearEl.value);
+      const month = parseInt(monthEl.value);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      dayRangeEl.max = daysInMonth;
+      if (parseInt(dayRangeEl.value) > daysInMonth) {
+        dayRangeEl.value = daysInMonth;
+      }
+      dateDisplayEl.textContent = dayRangeEl.value + '日';
+    }
+    
+    function render(){ 
+      resize(); 
+      const date = getCurrentDate();
+      const info = AstroMath.moonIllumination(date); 
+      drawMoon(info.fraction, info.phase < 0.5); 
+      illumEl.textContent = (info.fraction * 100).toFixed(1) + '%'; 
+      phaseNameEl.textContent = info.name; 
+      ageEl.textContent = info.ageDays.toFixed(2); 
+    }
+    
+    function setToday() {
+      const now = new Date();
+      yearEl.value = now.getFullYear();
+      monthEl.value = now.getMonth() + 1;
+      dayRangeEl.value = now.getDate();
+      updateDayRange();
+      render();
+    }
+    
+    // 事件监听器
+    yearEl.addEventListener('input', () => { updateDayRange(); render(); });
+    monthEl.addEventListener('input', () => { updateDayRange(); render(); });
+    dayRangeEl.addEventListener('input', () => { 
+      dateDisplayEl.textContent = dayRangeEl.value + '日'; 
+      render(); 
+    });
+    
+    minusDayBtn.addEventListener('click', () => {
+      let day = parseInt(dayRangeEl.value) - 1;
+      if (day < 1) {
+        let month = parseInt(monthEl.value) - 1;
+        if (month < 1) {
+          month = 12;
+          yearEl.value = parseInt(yearEl.value) - 1;
+        }
+        monthEl.value = month;
+        updateDayRange();
+        day = parseInt(dayRangeEl.max);
+      }
+      dayRangeEl.value = day;
+      dateDisplayEl.textContent = day + '日';
+      render();
+    });
+    
+    plusDayBtn.addEventListener('click', () => {
+      let day = parseInt(dayRangeEl.value) + 1;
+      const maxDay = parseInt(dayRangeEl.max);
+      if (day > maxDay) {
+        let month = parseInt(monthEl.value) + 1;
+        if (month > 12) {
+          month = 1;
+          yearEl.value = parseInt(yearEl.value) + 1;
+        }
+        monthEl.value = month;
+        updateDayRange();
+        day = 1;
+      }
+      dayRangeEl.value = day;
+      dateDisplayEl.textContent = day + '日';
+      render();
+    });
+    
+    nowBtn.addEventListener('click', setToday);
+    
+    window.addEventListener('resize', render);
+    
+    // 初始化
+    updateDayRange();
+    render();
+  })();
+  </script>
+</body>
+</html>

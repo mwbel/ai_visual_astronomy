@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>杆子影长变化</title>
+  <link rel="stylesheet" href="/app/modules/common/styles.css" />
+  <style>
+    .embed-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--card-bg-dark); margin-top: 12px; }
+    .embed-iframe { width:100%; height:720px; background:#0a0d12; border:0; border-radius:8px; }
+    @media (max-width: 900px) { .embed-iframe { height:600px; } }
+  </style>
+</head>
+<body class="theme-dark">
+  <header class="app-header">
+    <h1>杆子影长变化</h1>
+    <div class="header-actions"><a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a></div>
+  </header>
+  <main class="container">
+    <div id="topbar" class="topbar">
+      <div id="backContainer" class="section"></div>
+      <div id="locationContainer" class="section"></div>
+      <div id="dateContainer" class="section"></div>
+    </div>
+    <section id="content" style="margin-top:12px;">
+      <div class="visualization-container">
+        <div class="control-panel">
+          <div class="control-group">
+            <label for="poleHeight">杆子高度 (米):</label>
+            <input type="range" id="poleHeight" min="0.5" max="5" step="0.1" value="1.0">
+            <span id="poleHeightValue">1.0</span>
+          </div>
+          <div class="control-group">
+            <label for="hourSlider">小时:</label>
+            <input type="range" id="hourSlider" min="0" max="23" step="0.5" value="12">
+            <span id="hourValue">12:00</span>
+          </div>
+          <div class="control-group">
+            <label for="viewMode">显示模式:</label>
+            <select id="viewMode">
+              <option value="2d">2D影长曲线</option>
+              <option value="3d">3D影子可视化（地面）</option>
+              <option value="sphere">3D天球模型（杆竖在球心）</option>
+              <option value="comparison">纬度对比</option>
+            </select>
+          </div>
+          <button id="updateBtn" class="btn btn-primary">更新可视化</button>
+        </div>
+        
+        <div id="visualization" class="plot-container">
+          <div id="plotly-div" style="width: 100%; height: 600px;"></div>
+        </div>
+        
+        <div class="info-panel">
+          <h3>杆子影长变化说明</h3>
+          <ul>
+            <li><strong>影长计算</strong>: 影长 = 杆高 / tan(太阳高度角)</li>
+            <li><strong>最短影子</strong>: 出现在太阳正午时刻，太阳高度角最大</li>
+            <li><strong>纬度影响</strong>: 纬度越高，影子变化越明显</li>
+            <li><strong>季节变化</strong>: 夏至影子最短，冬至影子最长</li>
+          </ul>
+          
+          <h3>3D半天球：杆影变化（内嵌）</h3>
+          <div class="embed-wrap">
+            <iframe src="rod_shadow_daily.html" title="24小时杆影变化(3D半球)" class="embed-iframe" loading="lazy" referrerpolicy="no-referrer"></iframe>
+          </div>
+          <div class="embed-wrap">
+            <iframe src="rod_shadow_annual_noon.html" title="全年正午杆影变化(3D半球)" class="embed-iframe" loading="lazy" referrerpolicy="no-referrer"></iframe>
+          </div>
+          <div class="legend" style="color:var(--muted); font-size:14px;">
+            <span>提示：可在内嵌区右上角使用图表工具栏；也可<a href="rod_shadow_daily.html" target="_blank">新窗口打开日变化</a>、<a href="rod_shadow_annual_noon.html" target="_blank">新窗口打开年度正午</a></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div style="text-align: center; padding: 16px;">
+    <a class="btn" href="/app/modules/modern_astronomy/">返回模块主页</a>
+  </div>
+  <footer class="app-footer">© 2025 Modern Astronomy</footer>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="/app/modules/common/BackButton.js"></script>
+  <script src="/app/modules/common/LocationSelector.js"></script>
+  <script src="/app/modules/common/DateSelector.js"></script>
+  <script>
+    LocationSelector.renderLocationSelector('#locationContainer',{ url:'/data/cities.csv' });
+    DateSelector.renderDateSelector('#dateContainer');
+
+    // 影长计算函数
+    function calculateShadowLength(sunAltitudeDeg, poleHeight = 1.0) {
+      if (sunAltitudeDeg <= 0) return 0;
+      const sunAltRad = sunAltitudeDeg * Math.PI / 180;
+      return poleHeight / Math.tan(sunAltRad);
+    }
+
+    // 太阳位置计算（简化版）
+    function calculateSunPosition(latitude, longitude, date, hour) {
+      const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+      const declination = 23.45 * Math.sin((360 * (284 + dayOfYear) / 365) * Math.PI / 180);
+      const hourAngle = 15 * (hour - 12);
+      
+      const latRad = latitude * Math.PI / 180;
+      const decRad = declination * Math.PI / 180;
+      const hourRad = hourAngle * Math.PI / 180;
+      
+      const altitude = Math.asin(
+        Math.sin(latRad) * Math.sin(decRad) + 
+        Math.cos(latRad) * Math.cos(decRad) * Math.cos(hourRad)
+      ) * 180 / Math.PI;
+      
+      const azimuth = Math.atan2(
+        Math.sin(hourRad),
+        Math.cos(hourRad) * Math.sin(latRad) - Math.tan(decRad) * Math.cos(latRad)
+      ) * 180 / Math.PI + 180;
+      
+      return { altitude, azimuth };
+    }
+
+    // 创建2D影长曲线
+    function create2DVisualization(latitude, longitude, date, poleHeight) {
+      const hours = Array.from({length: 24}, (_, i) => i);
+      const shadowLengths = [];
+      const sunAltitudes = [];
+      
+      hours.forEach(hour => {
+        const sunPos = calculateSunPosition(latitude, longitude, date, hour);
+        const shadowLen = calculateShadowLength(sunPos.altitude, poleHeight);
+        shadowLengths.push(shadowLen > 50 ? null : shadowLen);
+        sunAltitudes.push(sunPos.altitude);
+      });
+
+      const trace1 = {
+        x: hours,
+        y: shadowLengths,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: '影长变化',
+        line: { color: '#1E3A8A', width: 3 },
+        marker: { size: 6, color: '#1E3A8A' }
+      };
+
+      const trace2 = {
+        x: hours,
+        y: sunAltitudes,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: '太阳高度角',
+        line: { color: 'orange', width: 2 },
+        marker: { size: 4, color: 'orange' },
+        yaxis: 'y2'
+      };
+
+      const layout = {
+        title: `杆子影长变化 - ${date.toLocaleDateString()} (纬度: ${latitude}°)`,
+        xaxis: { title: '时间 (小时)' },
+        yaxis: { title: '影长 (米)' },
+        yaxis2: {
+          title: '太阳高度角 (度)',
+          overlaying: 'y',
+          side: 'right'
+        },
+        template: 'plotly_dark',
+        hovermode: 'x unified',
+        font: { color: '#1E3A8A' }
+      };
+
+      Plotly.newPlot('plotly-div', [trace1, trace2], layout);
+    }
+
+    // 创建3D影子可视化（地面）
+    function create3DVisualization(latitude, longitude, date, poleHeight) {
+      const traces = [];
+      
+      // 地面
+      const groundSize = 5;
+      const groundX = [];
+      const groundY = [];
+      const groundZ = [];
+      
+      for (let i = 0; i < 20; i++) {
+        groundX.push([]);
+        groundY.push([]);
+        groundZ.push([]);
+        for (let j = 0; j < 20; j++) {
+          groundX[i].push(-groundSize + (2 * groundSize * j / 19));
+          groundY[i].push(-groundSize + (2 * groundSize * i / 19));
+          groundZ[i].push(0);
+        }
+      }
+      
+      traces.push({
+        type: 'surface',
+        x: groundX,
+        y: groundY,
+        z: groundZ,
+        colorscale: [[0, 'lightgray'], [1, 'lightgray']],
+        showscale: false,
+        opacity: 0.7,
+        name: '地面'
+      });
+
+      // 杆子
+      traces.push({
+        type: 'scatter3d',
+        x: [0, 0],
+        y: [0, 0],
+        z: [0, poleHeight],
+        mode: 'lines+markers',
+        line: { color: 'brown', width: 8 },
+        marker: { size: 4, color: 'brown' },
+        name: '杆子'
+      });
+
+      // 关键时刻的影子
+      const keyHours = [6, 9, 12, 15, 18];
+      const colors = ['purple', '#1E3A8A', 'red', 'orange', 'darkblue'];
+      
+      keyHours.forEach((hour, i) => {
+        const sunPos = calculateSunPosition(latitude, longitude, date, hour);
+        const shadowLen = calculateShadowLength(sunPos.altitude, poleHeight);
+        
+        if (shadowLen > 0 && shadowLen < 20) {
+          const shadowAzimuth = (sunPos.azimuth + 180) % 360;
+          const shadowAzRad = shadowAzimuth * Math.PI / 180;
+          
+          const shadowX = shadowLen * Math.sin(shadowAzRad);
+          const shadowY = shadowLen * Math.cos(shadowAzRad);
+          
+          traces.push({
+            type: 'scatter3d',
+            x: [0, shadowX],
+            y: [0, shadowY],
+            z: [0, 0],
+            mode: 'lines+markers',
+            line: { color: colors[i], width: 4 },
+            marker: { size: 3, color: colors[i] },
+            name: `${hour.toString().padStart(2, '0')}:00 影子`
+          });
+        }
+      });
+
+      const layout = {
+        title: `3D影子可视化 - ${date.toLocaleDateString()} (纬度: ${latitude}°)`,
+        scene: {
+          xaxis: { title: '东西方向 (米)' },
+          yaxis: { title: '南北方向 (米)' },
+          zaxis: { title: '高度 (米)' },
+          aspectmode: 'cube',
+          bgcolor: 'rgb(0,0,0)'
+        },
+        template: 'plotly_dark',
+        font: { color: '#1E3A8A' }
+      };
+
+      Plotly.newPlot('plotly-div', traces, layout);
+    }
+
+    // 3D天球模型（杆竖在球心） + 影长随时间变化
+    function createCelestialSphereVisualization(latitude, longitude, date, hour, poleHeight) {
+      const deg2rad = (d)=> d*Math.PI/180;
+      const latRad = deg2rad(latitude);
+      const traces = [];
+
+      // 天球（上下两个半球曲面）
+      const gridN = 50; const range = 1;
+      const X = [], Y = [], Ztop = [], Zbot = [];
+      for(let i=0;i<gridN;i++){
+        X.push([]); Y.push([]); Ztop.push([]); Zbot.push([]);
+        for(let j=0;j<gridN;j++){
+          const x = -range + 2*range*j/(gridN-1);
+          const y = -range + 2*range*i/(gridN-1);
+          const r2 = x*x + y*y;
+          const z = r2<=1 ? Math.sqrt(1-r2) : NaN;
+          X[i].push(x); Y[i].push(y); Ztop[i].push(z);
+          Zbot[i].push(r2<=1 ? -Math.sqrt(1-r2) : NaN);
+        }
+      }
+      traces.push({ type:'surface', x:X, y:Y, z:Ztop, showscale:false, opacity:0.25, colorscale:[[0,'#2b3b55'],[1,'#2b3b55']], name:'天球上半' });
+      traces.push({ type:'surface', x:X, y:Y, z:Zbot, showscale:false, opacity:0.25, colorscale:[[0,'#2b3b55'],[1,'#2b3b55']], name:'天球下半' });
+
+      // 地平面
+      const Hx=[], Hy=[], Hz=[]; const planeN=50; const pr=1.0;
+      for(let i=0;i<planeN;i++){ Hx.push([]); Hy.push([]); Hz.push([]); for(let j=0;j<planeN;j++){ const x=-pr+2*pr*j/(planeN-1); const y=-pr+2*pr*i/(planeN-1); Hx[i].push(x); Hy[i].push(y); Hz[i].push(0);} }
+      traces.push({ type:'surface', x:Hx, y:Hy, z:Hz, showscale:false, opacity:0.35, colorscale:[[0,'#6b7280'],[1,'#6b7280']], name:'地平面(z=0)' });
+
+      // 杆子（从球心竖向指向天顶）
+      traces.push({ type:'scatter3d', x:[0,0], y:[0,0], z:[0,1], mode:'lines', line:{color:'#b58900', width:6}, name:'杆（球心→天顶）' });
+
+      // 北天极方向（随纬度）
+      const pole = { x: 0, y: Math.cos(latRad), z: Math.sin(latRad) };
+      traces.push({ type:'scatter3d', x:[0,pole.x], y:[0,pole.y], z:[0,pole.z], mode:'lines', line:{color:'#ff6b6b', width:4}, name:`北天极方向 (φ=${latitude}°)` });
+
+      // 周日圆
+      const decls = [23.44, 0, -23.44];
+      const colors = ['#f59e0b','#60a5fa','#34d399'];
+      const n = [0, Math.cos(latRad), Math.sin(latRad)];
+      const u = [ 1, 0, 0 ];
+      const un = Math.hypot(u[0],u[1],u[2]); u[0]/=un; u[1]/=un; u[2]/=un;
+      const v = [ n[1]*u[2]-n[2]*u[1], n[2]*u[0]-n[0]*u[2], n[0]*u[1]-n[1]*u[0] ];
+      const samples = 256;
+      decls.forEach((dDeg, idx)=>{
+        const d = deg2rad(dDeg);
+        const center = [ n[0]*Math.sin(d), n[1]*Math.sin(d), n[2]*Math.sin(d) ];
+        const r = Math.cos(d);
+        const xx=[], yy=[], zz=[];
+        for(let k=0;k<=samples;k++){
+          const t = 2*Math.PI*k/samples;
+          const pt = [ center[0] + r*(u[0]*Math.cos(t) + v[0]*Math.sin(t)),
+                       center[1] + r*(u[1]*Math.cos(t) + v[1]*Math.sin(t)),
+                       center[2] + r*(u[2]*Math.cos(t) + v[2]*Math.sin(t)) ];
+          xx.push(pt[0]); yy.push(pt[1]); zz.push(pt[2]);
+        }
+        traces.push({ type:'scatter3d', x:xx, y:yy, z:zz, mode:'lines', line:{ color: colors[idx], width:3 }, name:`周日圆 δ=${dDeg}°` });
+      });
+
+      // 24小时影长轨迹（地平面投影）
+      const hours = Array.from({length:24}, (_,i)=>i);
+      const trackX=[], trackY=[], trackZ=[];
+      hours.forEach(h=>{
+        const pos = calculateSunPosition(latitude, longitude, date, h);
+        const len = calculateShadowLength(pos.altitude, poleHeight);
+        if (len>0 && isFinite(len)){
+          const az = (pos.azimuth + 180) % 360; // 影子朝向与太阳相反
+          const rad = az*Math.PI/180;
+          trackX.push(len*Math.sin(rad));
+          trackY.push(len*Math.cos(rad));
+          trackZ.push(0);
+        } else {
+          trackX.push(null); trackY.push(null); trackZ.push(null);
+        }
+      });
+      traces.push({ type:'scatter3d', mode:'lines+markers', x:trackX, y:trackY, z:trackZ, line:{color:'#1E3A8A', width:3}, marker:{color:'#1E3A8A', size:3}, name:'影长轨迹(24h)' });
+
+      // 当前小时影子高亮
+      const curr = calculateSunPosition(latitude, longitude, date, hour);
+      const currLen = calculateShadowLength(curr.altitude, poleHeight);
+      if (currLen>0 && isFinite(currLen)){
+        const az = (curr.azimuth + 180) % 360; const rad = az*Math.PI/180;
+        const sx = currLen*Math.sin(rad); const sy = currLen*Math.cos(rad);
+        traces.push({ type:'scatter3d', mode:'lines+markers', x:[0,sx], y:[0,sy], z:[0,0], line:{color:'red', width:6}, marker:{color:'red', size:6}, name:`当前影子 ${hour.toString().padStart(2,'0')}:00` });
+      }
+
+      const layout = {
+        title: `3D天球模型（杆竖在球心） - 纬度 ${latitude}°`,
+        scene: {
+          xaxis: { title:'东(+)西(-)' }, yaxis:{ title:'北(+)南(-)' }, zaxis:{ title:'天顶(+)地心(-)' },
+          aspectmode: 'cube', bgcolor:'rgb(0,0,0)'
+        }, template:'plotly_dark',
+        font: { color: '#1E3A8A' }
+      };
+      Plotly.newPlot('plotly-div', traces, layout);
+    }
+
+    // 创建纬度对比
+    function createLatitudeComparison(date, poleHeight) {
+      const latitudes = [0, 23.5, 45, 60];
+      const latitudeNames = ['赤道', '北回归线', '中纬度', '高纬度'];
+      const colors = ['red', 'orange', 'green', '#1E3A8A'];
+      const traces = [];
+      
+      latitudes.forEach((lat, i) => {
+        const hours = Array.from({length: 24}, (_, i) => i);
+        const shadowLengths = [];
+        
+        hours.forEach(hour => {
+          const sunPos = calculateSunPosition(lat, 0, date, hour);
+          const shadowLen = calculateShadowLength(sunPos.altitude, poleHeight);
+          shadowLengths.push(shadowLen > 50 ? null : shadowLen);
+        });
+        
+        traces.push({
+          x: hours,
+          y: shadowLengths,
+          type: 'scatter',
+          mode: 'lines+markers',
+          name: `${latitudeNames[i]} (${lat}°)`,
+          line: { color: colors[i], width: 2 },
+          marker: { size: 4, color: colors[i] }
+        });
+      });
+
+      const layout = {
+        title: `不同纬度影长对比 - ${date.toLocaleDateString()}`,
+        xaxis: { title: '时间 (小时)' },
+        yaxis: { title: '影长 (米)' },
+        template: 'plotly_dark',
+        hovermode: 'x unified',
+        font: { color: '#1E3A8A' }
+      };
+
+      Plotly.newPlot('plotly-div', traces, layout);
+    }
+
+    // 更新可视化
+    function updateVisualization() {
+      const latitude = parseFloat(document.querySelector('#locationContainer input[name="latitude"]')?.value || 31.23);
+      const longitude = parseFloat(document.querySelector('#locationContainer input[name="longitude"]')?.value || 121.47);
+      const date = new Date(document.querySelector('#dateContainer input[type="date"]')?.value || new Date());
+      const poleHeight = parseFloat(document.getElementById('poleHeight').value);
+      const hour = parseFloat(document.getElementById('hourSlider').value);
+      const viewMode = document.getElementById('viewMode').value;
+
+      switch (viewMode) {
+        case '2d':
+          create2DVisualization(latitude, longitude, date, poleHeight);
+          break;
+        case '3d':
+          create3DVisualization(latitude, longitude, date, poleHeight);
+          break;
+        case 'sphere':
+          createCelestialSphereVisualization(latitude, longitude, date, hour, poleHeight);
+          break;
+        case 'comparison':
+          createLatitudeComparison(date, poleHeight);
+          break;
+      }
+    }
+
+    // 事件监听
+    document.getElementById('poleHeight').addEventListener('input', function() {
+      document.getElementById('poleHeightValue').textContent = this.value;
+    });
+    document.getElementById('hourSlider').addEventListener('input', function(){
+      const h = parseFloat(this.value);
+      document.getElementById('hourValue').textContent = `${Math.floor(h)}:${String(Math.floor((h%1)*60)).padStart(2,'0')}`;
+    });
+
+    document.getElementById('updateBtn').addEventListener('click', updateVisualization);
+    document.getElementById('viewMode').addEventListener('change', updateVisualization);
+
+    // 初始化
+    setTimeout(() => {
+      updateVisualization();
+    }, 1000);
+  </script>
+</body>
+</html>
